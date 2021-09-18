@@ -3,6 +3,7 @@ assert() {
   expected="$1"
   input="$2"
 
+	cargo run
   ./target/debug/qcc "$input" > tmp.s
   cc -o tmp tmp.s
   ./tmp
