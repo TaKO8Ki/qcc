@@ -3,7 +3,6 @@ assert() {
   expected="$1"
   input="$2"
 
-	cargo run
   ./target/debug/qcc "$input" > tmp.s
   cc -o tmp tmp.s
   ./tmp
@@ -16,6 +15,8 @@ assert() {
     exit 1
   fi
 }
+
+cargo build
 
 assert 0 0
 assert 42 42
