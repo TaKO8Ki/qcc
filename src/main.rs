@@ -129,17 +129,26 @@ impl Tokens {
     }
 
     fn mul(&mut self) -> Node {
-        let mut node = self.primary();
+        let mut node = self.unary();
 
         loop {
             if self.consume('*') {
-                node = Node::new(NodeKind::Mul, node, self.primary());
+                node = Node::new(NodeKind::Mul, node, self.unary());
             } else if self.consume('/') {
-                node = Node::new(NodeKind::Div, node, self.primary());
+                node = Node::new(NodeKind::Div, node, self.unary());
             } else {
                 return node;
             }
         }
+    }
+
+    fn unary(&mut self) -> Node {
+        if self.consume('+') {
+            return self.primary();
+        } else if self.consume('-') {
+            return Node::new(NodeKind::Sub, Node::new_node_num(0), self.primary());
+        }
+        self.primary()
     }
 
     fn primary(&mut self) -> Node {
