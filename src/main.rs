@@ -65,7 +65,7 @@ impl Node {
 
     fn gen(&self, asm: &mut Vec<String>) {
         if let NodeKind::Num(val) = self.kind {
-            asm.push(format!("push {}", val));
+            asm.push(format!("  push {}", val));
             return;
         }
 
@@ -81,13 +81,13 @@ impl Node {
 
         match self.kind {
             NodeKind::Add => {
-                asm.push(String::from("  add rdi"));
+                asm.push(String::from("  add rax, rdi"));
             }
             NodeKind::Sub => {
-                asm.push(String::from("  sub rax"));
+                asm.push(String::from("  sub rax, rdi"));
             }
             NodeKind::Mul => {
-                asm.push(String::from("  imul rax"));
+                asm.push(String::from("  imul rax, rdi"));
             }
             NodeKind::Div => {
                 asm.push(String::from("  cqo"));
@@ -108,15 +108,6 @@ impl Tokens {
     fn next(&mut self) -> Option<&Token> {
         self.index += 1;
         self.tokens.get(self.index - 1)
-    }
-
-    fn get(&self) -> String {
-        self.tokens
-            .iter()
-            .enumerate()
-            .filter(|(idx, _)| idx <= &self.index)
-            .map(|(_, v)| v.value())
-            .collect()
     }
 
     fn token(&self) -> &Token {
@@ -170,23 +161,6 @@ impl Tokens {
         true
     }
 
-    fn expect(&mut self, op: char) -> bool {
-        let token = self.token();
-        if token.kind != TokenKind::Reserved || token.str != op {
-            return false;
-        }
-        self.next();
-        true
-    }
-
-    fn value(&self) -> String {
-        let token = self.token();
-        match token.kind {
-            TokenKind::Num(val) => val.to_string(),
-            _ => token.str.to_string(),
-        }
-    }
-
     fn expect_number(&mut self) -> Result<u16, String> {
         let token = self.token();
         if let TokenKind::Num(val) = token.kind {
@@ -196,23 +170,12 @@ impl Tokens {
             Err(format!("{} is not number", token.str))
         }
     }
-
-    fn at_eof(&self) -> bool {
-        self.token().kind == TokenKind::Eof
-    }
 }
 
 impl Token {
     fn new(kind: TokenKind, str: char) -> Self {
         let tok = Self { kind, str };
         tok
-    }
-
-    fn value(&self) -> String {
-        match self.kind {
-            TokenKind::Num(val) => val.to_string(),
-            _ => self.str.to_string(),
-        }
     }
 
     fn tokenize(p: String) -> Result<Vec<Token>, String> {
@@ -227,7 +190,7 @@ impl Token {
                 continue;
             }
 
-            if p == '+' || p == '-' {
+            if p == '+' || p == '-' || p == '*' || p == '/' || p == '(' || p == ')' {
                 tokens.push(Self::new(TokenKind::Reserved, p));
                 continue;
             }
@@ -290,6 +253,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let mut tokens = Tokens::new(tokens);
+    let node = tokens.expr();
 
     log::debug!("tokens: {:?}", tokens);
 
@@ -297,37 +261,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     asm.push(String::from(".globl main"));
     asm.push(String::from("main:"));
 
-    match tokens.expect_number() {
-        Ok(num) => asm.push(format!("  mov rax, {}", num)),
-        Err(err) => panic!(
-            "{}",
-            error_at(
-                tokens.tokens.first().unwrap().value(),
-                chars.clone().collect::<String>(),
-                err,
-            )
-        ),
-    }
+    node.gen(&mut asm);
 
-    while !matches!(tokens.token().kind, TokenKind::Eof) {
-        if tokens.consume('+') {
-            match tokens.expect_number() {
-                Ok(num) => asm.push(format!("  add rax, {}", num)),
-                Err(err) => {
-                    eprintln!(
-                        "{}",
-                        error_at(tokens.get(), chars.clone().collect::<String>(), err,)
-                    );
-                    return Ok(());
-                }
-            }
-            continue;
-        }
-
-        tokens.expect('-');
-        asm.push(format!("  sub rax, {}", tokens.expect_number()?));
-    }
-
+    asm.push(String::from("  pop rax"));
     asm.push(String::from("  ret"));
 
     println!("{}", asm.join("\n"));
