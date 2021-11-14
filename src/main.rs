@@ -8,10 +8,30 @@ enum TokenKind {
     Eof,
 }
 
+enum NodeKind {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Num(u16),
+}
+
+#[derive(Debug, Clone)]
+struct Tokens {
+    tokens: Vec<Token>,
+    index: usize,
+}
+
 #[derive(Debug, Clone)]
 struct Token {
     kind: TokenKind,
     str: char,
+}
+
+struct Node {
+    kind: NodeKind,
+    lhs: Option<Box<Node>>,
+    rhs: Option<Box<Node>>,
 }
 
 fn error_at(loc: String, input: String, error: String) -> String {
@@ -26,24 +46,166 @@ fn error_at(loc: String, input: String, error: String) -> String {
     ))
 }
 
+impl Node {
+    fn new(kind: NodeKind, lhs: Node, rhs: Node) -> Self {
+        Node {
+            kind,
+            lhs: Some(Box::new(lhs)),
+            rhs: Some(Box::new(rhs)),
+        }
+    }
+
+    fn new_node_num(val: u16) -> Self {
+        Node {
+            kind: NodeKind::Num(val),
+            lhs: None,
+            rhs: None,
+        }
+    }
+
+    fn gen(&self, asm: &mut Vec<String>) {
+        if let NodeKind::Num(val) = self.kind {
+            asm.push(format!("push {}", val));
+            return;
+        }
+
+        if let Some(node) = self.lhs.as_ref() {
+            node.gen(asm);
+        }
+        if let Some(node) = self.rhs.as_ref() {
+            node.gen(asm);
+        }
+
+        asm.push(String::from("  pop rdi"));
+        asm.push(String::from("  pop rax"));
+
+        match self.kind {
+            NodeKind::Add => {
+                asm.push(String::from("  add rdi"));
+            }
+            NodeKind::Sub => {
+                asm.push(String::from("  sub rax"));
+            }
+            NodeKind::Mul => {
+                asm.push(String::from("  imul rax"));
+            }
+            NodeKind::Div => {
+                asm.push(String::from("  cqo"));
+                asm.push(String::from("  idiv rdi"));
+            }
+            _ => {}
+        }
+
+        asm.push(String::from("  push rax"));
+    }
+}
+
+impl Tokens {
+    fn new(tokens: Vec<Token>) -> Self {
+        Tokens { tokens, index: 0 }
+    }
+
+    fn next(&mut self) -> Option<&Token> {
+        self.index += 1;
+        self.tokens.get(self.index - 1)
+    }
+
+    fn get(&self) -> String {
+        self.tokens
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| idx <= &self.index)
+            .map(|(_, v)| v.value())
+            .collect()
+    }
+
+    fn token(&self) -> &Token {
+        &self.tokens[self.index]
+    }
+
+    fn expr(&mut self) -> Node {
+        let mut node = self.mul();
+
+        loop {
+            if self.consume('+') {
+                node = Node::new(NodeKind::Add, node, self.mul());
+            } else if self.consume('-') {
+                node = Node::new(NodeKind::Sub, node, self.mul());
+            } else {
+                return node;
+            }
+        }
+    }
+
+    fn mul(&mut self) -> Node {
+        let mut node = self.primary();
+
+        loop {
+            if self.consume('*') {
+                node = Node::new(NodeKind::Mul, node, self.primary());
+            } else if self.consume('/') {
+                node = Node::new(NodeKind::Div, node, self.primary());
+            } else {
+                return node;
+            }
+        }
+    }
+
+    fn primary(&mut self) -> Node {
+        if self.consume('(') {
+            let node = self.expr();
+            self.consume(')');
+            return node;
+        }
+
+        Node::new_node_num(self.expect_number().unwrap())
+    }
+
+    fn consume(&mut self, op: char) -> bool {
+        let token = self.token();
+        if token.kind != TokenKind::Reserved || token.str != op {
+            return false;
+        }
+        self.next();
+        true
+    }
+
+    fn expect(&mut self, op: char) -> bool {
+        let token = self.token();
+        if token.kind != TokenKind::Reserved || token.str != op {
+            return false;
+        }
+        self.next();
+        true
+    }
+
+    fn value(&self) -> String {
+        let token = self.token();
+        match token.kind {
+            TokenKind::Num(val) => val.to_string(),
+            _ => token.str.to_string(),
+        }
+    }
+
+    fn expect_number(&mut self) -> Result<u16, String> {
+        let token = self.token();
+        if let TokenKind::Num(val) = token.kind {
+            self.next();
+            Ok(val)
+        } else {
+            Err(format!("{} is not number", token.str))
+        }
+    }
+
+    fn at_eof(&self) -> bool {
+        self.token().kind == TokenKind::Eof
+    }
+}
+
 impl Token {
     fn new(kind: TokenKind, str: char) -> Self {
         let tok = Self { kind, str };
         tok
-    }
-
-    fn consume(&self, op: char) -> bool {
-        if self.kind != TokenKind::Reserved || self.str != op {
-            return false;
-        }
-        true
-    }
-
-    fn expect(&self, op: char) -> bool {
-        if self.kind != TokenKind::Reserved || self.str != op {
-            return false;
-        }
-        true
     }
 
     fn value(&self) -> String {
@@ -51,18 +213,6 @@ impl Token {
             TokenKind::Num(val) => val.to_string(),
             _ => self.str.to_string(),
         }
-    }
-
-    fn expect_number(&self) -> Result<u16, String> {
-        if let TokenKind::Num(val) = self.kind {
-            Ok(val)
-        } else {
-            Err(format!("{} is not number", self.str))
-        }
-    }
-
-    fn at_eof(&self) -> bool {
-        self.kind == TokenKind::Eof
     }
 
     fn tokenize(p: String) -> Result<Vec<Token>, String> {
@@ -118,21 +268,18 @@ impl Token {
             ));
         }
 
-        Self::new(TokenKind::Eof, '\0');
+        tokens.push(Self::new(TokenKind::Eof, '\0'));
         Ok(tokens)
     }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
+
     let arg = env::args().nth(1).unwrap();
 
     let chars = arg.chars();
-
-    let mut result = vec![];
-
-    result.push(String::from(".intel_syntax noprefix"));
-    result.push(String::from(".globl main"));
-    result.push(String::from("main:"));
+    let mut asm = vec![];
 
     let tokens = match Token::tokenize(chars.clone().collect::<String>()) {
         Ok(tokens) => tokens,
@@ -142,66 +289,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let mut tokens_iter = tokens.iter().enumerate();
+    let mut tokens = Tokens::new(tokens);
 
-    // println!("tokens: {:?}", tokens);
+    log::debug!("tokens: {:?}", tokens);
 
-    match tokens_iter.next().unwrap().1.expect_number() {
-        Ok(num) => result.push(format!("  mov rax, {}", num)),
+    asm.push(String::from(".intel_syntax noprefix"));
+    asm.push(String::from(".globl main"));
+    asm.push(String::from("main:"));
+
+    match tokens.expect_number() {
+        Ok(num) => asm.push(format!("  mov rax, {}", num)),
         Err(err) => panic!(
             "{}",
             error_at(
-                tokens.first().unwrap().value(),
+                tokens.tokens.first().unwrap().value(),
                 chars.clone().collect::<String>(),
                 err,
             )
         ),
     }
-    // println!(
-    //     "  mov rax, {}",
-    //     tokens_iter.next().unwrap().expect_number()?
-    // );
 
-    while let Some((_, token)) = tokens_iter.next() {
-        if token.at_eof() {
-            break;
-        }
-        if token.consume('+') {
-            if let Some((i, token)) = tokens_iter.next() {
-                match token.expect_number() {
-                    Ok(num) => result.push(format!("  add rax, {}", num)),
-                    Err(err) => {
-                        eprintln!(
-                            "{}",
-                            error_at(
-                                tokens
-                                    .iter()
-                                    .enumerate()
-                                    .filter(|(idx, _)| idx <= &i)
-                                    .map(|(_, v)| v.value())
-                                    .collect(),
-                                chars.clone().collect::<String>(),
-                                err,
-                            )
-                        );
-                        return Ok(());
-                    }
+    while !matches!(tokens.token().kind, TokenKind::Eof) {
+        if tokens.consume('+') {
+            match tokens.expect_number() {
+                Ok(num) => asm.push(format!("  add rax, {}", num)),
+                Err(err) => {
+                    eprintln!(
+                        "{}",
+                        error_at(tokens.get(), chars.clone().collect::<String>(), err,)
+                    );
+                    return Ok(());
                 }
             }
             continue;
         }
 
-        if token.expect('-') {
-            if let Some((_, token)) = tokens_iter.next() {
-                result.push(format!("  sub rax, {}", token.expect_number()?));
-            }
-        } else {
-            result.push(format!("  sub rax, {}", token.expect_number()?));
-        };
+        tokens.expect('-');
+        asm.push(format!("  sub rax, {}", tokens.expect_number()?));
     }
 
-    result.push(String::from("  ret"));
+    asm.push(String::from("  ret"));
 
-    println!("{}", result.join("\n"));
+    println!("{}", asm.join("\n"));
     Ok(())
 }
