@@ -16,7 +16,9 @@ assert() {
   fi
 }
 
-# cargo build
+if [ ! -f "./target/debug/qcc" ]; then
+    cargo build
+fi
 
 assert 0 0
 assert 42 42
@@ -27,6 +29,6 @@ assert 15 '5*(9-6)'
 assert 4 '(3+5)/2'
 assert 10 '-10+20'
 assert 1 '(-3+5)/2'
-assert 30 '(-3*+5)/-2'
+assert 6 '(-3*+4)/-2'
 
 echo OK
