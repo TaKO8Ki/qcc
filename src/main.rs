@@ -272,7 +272,7 @@ impl Token {
             }
 
             if let Some(index) = index {
-                let p_foo = format!(
+                let two_chars = format!(
                     "{}{}",
                     p,
                     &chars_vec
@@ -280,11 +280,11 @@ impl Token {
                         .map(|p| p.to_string())
                         .unwrap_or_default()
                 );
-                log::debug!("p_foo={}", p_foo);
-                if p_foo.starts_with("==")
-                    || p_foo.starts_with("!=")
-                    || p_foo.starts_with("<=")
-                    || p_foo.starts_with(">=")
+                log::debug!("two_chars={}", two_chars);
+                if two_chars.starts_with("==")
+                    || two_chars.starts_with("!=")
+                    || two_chars.starts_with("<=")
+                    || two_chars.starts_with(">=")
                 {
                     let second = chars_iter.next();
                     tokens.push(Token::new(
@@ -320,7 +320,7 @@ impl Token {
                     p,
                 ));
                 if let Some(op) = op {
-                    let p_foo = format!(
+                    let two_chars = format!(
                         "{}{}",
                         op,
                         chars_vec
@@ -328,8 +328,12 @@ impl Token {
                             .map(|p| p.to_string())
                             .unwrap_or_default()
                     );
-                    log::debug!("p_foo_2={}", p_foo);
-                    if p_foo == "==" || p_foo == "!=" || p_foo == "<=" || p_foo == ">=" {
+                    log::debug!("two_chars_2={}", two_chars);
+                    if two_chars == "=="
+                        || two_chars == "!="
+                        || two_chars == "<="
+                        || two_chars == ">="
+                    {
                         let second = chars_iter.next();
                         tokens.push(Token::new(
                             TokenKind::Reserved,
