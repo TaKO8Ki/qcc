@@ -59,7 +59,20 @@ impl Token {
                 }
             }
 
-            if p == '+' || p == '-' || p == '*' || p == '/' || p == '(' || p == ')' {
+            if 'a' <= p && p <= 'z' {
+                tokens.push(Self::new(TokenKind::Ident, p));
+                continue;
+            }
+
+            if p == '+'
+                || p == '-'
+                || p == '*'
+                || p == '/'
+                || p == '('
+                || p == ')'
+                || p == ';'
+                || p == '='
+            {
                 tokens.push(Self::new(TokenKind::Reserved, p));
                 continue;
             }

@@ -7,6 +7,7 @@ mod tokenize;
 #[derive(PartialEq, Clone, Debug)]
 enum TokenKind {
     Reserved,
+    Ident,
     Num(u16),
     Eof,
 }
@@ -21,12 +22,15 @@ enum NodeKind {
     Ne,
     Lt,
     Le,
+    Assign,
+    Var(usize),
     Num(u16),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Tokens {
     tokens: Vec<Token>,
+    code: Vec<Node>,
     index: usize,
 }
 
@@ -60,13 +64,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let mut tokens = Tokens::new(tokens);
-    let node = tokens.expr();
+    tokens.program();
 
     log::debug!("tokens: {:?}", tokens);
 
-    log::debug!("node: {:?}", node);
-
-    node.codegen(&mut asm);
+    Node::codegen(&mut asm, tokens.code);
 
     println!("{}", asm.join("\n"));
     Ok(())

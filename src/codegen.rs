@@ -1,21 +1,58 @@
 use crate::{Node, NodeKind};
 
 impl Node {
-    pub fn codegen(&self, asm: &mut Vec<String>) {
+    pub fn codegen(asm: &mut Vec<String>, code: Vec<Node>) {
         asm.push(String::from(".intel_syntax noprefix"));
         asm.push(String::from(".globl main"));
         asm.push(String::from("main:"));
 
-        self.gen(asm);
+        asm.push(String::from("  push rbp"));
+        asm.push(String::from("  mov rbp, rsp"));
+        asm.push(String::from("  sub rsp, 208"));
 
-        asm.push(String::from("  pop rax"));
+        for node in code {
+            node.gen(asm);
+            asm.push(String::from("  pop rax"));
+        }
+
+        asm.push(String::from("  mov rsp, rbp"));
+        asm.push(String::from("  pop rbp"));
         asm.push(String::from("  ret"));
+    }
+
+    fn gen_lval(&self, asm: &mut Vec<String>) {
+        if let NodeKind::Var(offset) = self.kind {
+            asm.push(String::from("  mov rax, rbp"));
+            asm.push(format!("  sub rax, {}", offset));
+            asm.push(String::from("  push rax"));
+        }
     }
 
     pub fn gen(&self, asm: &mut Vec<String>) {
         match self.kind {
             NodeKind::Num(val) => {
                 asm.push(format!("  push {}", val));
+                return;
+            }
+            NodeKind::Var(_) => {
+                self.gen_lval(asm);
+                asm.push(String::from("  pop rax"));
+                asm.push(String::from("  mov rax, [rax]"));
+                asm.push(String::from("  push rax"));
+                return;
+            }
+            NodeKind::Assign => {
+                if let Some(node) = self.lhs.as_ref() {
+                    node.gen_lval(asm);
+                }
+                if let Some(node) = self.rhs.as_ref() {
+                    node.gen(asm);
+                }
+
+                asm.push(String::from("  pop rdi"));
+                asm.push(String::from("  pop rax"));
+                asm.push(String::from("  mov [rax], rdi"));
+                asm.push(String::from("  push rdi"));
                 return;
             }
             _ => (),

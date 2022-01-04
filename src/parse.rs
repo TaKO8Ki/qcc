@@ -16,11 +16,23 @@ impl Node {
             rhs: None,
         }
     }
+
+    fn new_node_var(val: usize) -> Self {
+        Node {
+            kind: NodeKind::Var(val),
+            lhs: None,
+            rhs: None,
+        }
+    }
 }
 
 impl Tokens {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Tokens { tokens, index: 0 }
+        Tokens {
+            tokens,
+            index: 0,
+            code: Vec::new(),
+        }
     }
 
     fn next(&mut self) -> Option<&Token> {
@@ -33,7 +45,34 @@ impl Tokens {
     }
 
     pub fn expr(&mut self) -> Node {
-        self.equality()
+        self.assign()
+    }
+
+    fn assign(&mut self) -> Node {
+        let mut node = self.equality();
+        if self.consume("=") {
+            node = Node::new(NodeKind::Assign, node, self.assign());
+        }
+        node
+    }
+
+    pub fn program(&mut self) {
+        loop {
+            log::debug!("program token={:?}", self.token());
+            if self.token().kind == TokenKind::Eof {
+                break;
+            }
+
+            let stmt = self.stmt();
+            self.code.push(stmt);
+        }
+    }
+
+    fn stmt(&mut self) -> Node {
+        let node = self.expr();
+        log::debug!("node: {:?}", node);
+        self.expect(';');
+        node
     }
 
     fn add(&mut self) -> Node {
@@ -80,7 +119,27 @@ impl Tokens {
             return node;
         }
 
-        Node::new_node_num(self.expect_number().unwrap())
+        if let TokenKind::Ident = self.token().kind {
+            let node = Node::new_node_var(
+                (b'a'..=b'z')
+                    .map(|c| c as char)
+                    .collect::<Vec<_>>()
+                    .iter()
+                    .position(|&x| x.to_string() == self.token().str.clone())
+                    .unwrap()
+                    + 1 * 8,
+            );
+            self.next();
+            return node;
+        }
+
+        if let TokenKind::Num(val) = self.token().kind {
+            let node = Node::new_node_num(val);
+            self.next();
+            return node;
+        }
+
+        panic!("primary: unexpected token {:?}", self.token());
     }
 
     fn equality(&mut self) -> Node {
@@ -115,16 +174,18 @@ impl Tokens {
         }
     }
 
-    fn expect(&mut self, op: &str) {
+    fn expect(&mut self, op: impl Into<String>) {
         let token = self.token();
+        let op = op.into();
         if token.kind != TokenKind::Reserved || token.str.to_string() != op {
             panic!("expected: {}, actual: {}", op, token.str);
         }
         self.next();
     }
 
-    fn consume(&mut self, op: &str) -> bool {
+    fn consume(&mut self, op: impl Into<String>) -> bool {
         let token = self.token();
+        let op = op.into();
         if token.kind != TokenKind::Reserved || token.str.to_string() != op {
             return false;
         }
