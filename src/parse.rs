@@ -1,4 +1,5 @@
-use crate::{Node, NodeKind, Token, TokenKind, Tokens};
+use crate::{LVar, Node, NodeKind, Token, TokenKind, Tokens};
+use std::collections::LinkedList;
 
 impl Node {
     fn new(kind: NodeKind, lhs: Node, rhs: Node) -> Self {
@@ -17,9 +18,9 @@ impl Node {
         }
     }
 
-    fn new_node_var(val: usize) -> Self {
+    fn new_node_var(offset: usize) -> Self {
         Node {
-            kind: NodeKind::Var(val),
+            kind: NodeKind::LVar(offset),
             lhs: None,
             rhs: None,
         }
@@ -29,6 +30,7 @@ impl Node {
 impl Tokens {
     pub fn new(tokens: Vec<Token>) -> Self {
         Tokens {
+            locals: LinkedList::new(),
             tokens,
             index: 0,
             code: Vec::new(),
@@ -38,6 +40,15 @@ impl Tokens {
     fn next(&mut self) -> Option<&Token> {
         self.index += 1;
         self.tokens.get(self.index - 1)
+    }
+
+    fn find_lvar(&self) -> Option<&LVar> {
+        for lvar in self.locals.iter() {
+            if lvar.name.len() == self.token().str.len() && lvar.name == self.token().str {
+                return Some(lvar);
+            }
+        }
+        None
     }
 
     fn token(&self) -> &Token {
@@ -120,15 +131,20 @@ impl Tokens {
         }
 
         if let TokenKind::Ident = self.token().kind {
-            let node = Node::new_node_var(
-                (b'a'..=b'z')
-                    .map(|c| c as char)
-                    .collect::<Vec<_>>()
-                    .iter()
-                    .position(|&x| x.to_string() == self.token().str.clone())
-                    .unwrap()
-                    + 1 * 8,
-            );
+            let lvar = self.find_lvar();
+            let node = match lvar {
+                Some(lvar) => Node::new_node_var(lvar.offset),
+                None => {
+                    let lvar = LVar {
+                        name: self.token().str.clone(),
+                        offset: self.locals.front().map_or(0, |lvar| lvar.offset) + 8,
+                    };
+                    let node = Node::new_node_var(lvar.offset);
+                    self.locals.push_front(lvar);
+                    node
+                }
+            };
+
             self.next();
             return node;
         }

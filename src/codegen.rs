@@ -21,7 +21,7 @@ impl Node {
     }
 
     fn gen_lval(&self, asm: &mut Vec<String>) {
-        if let NodeKind::Var(offset) = self.kind {
+        if let NodeKind::LVar(offset) = self.kind {
             asm.push(String::from("  mov rax, rbp"));
             asm.push(format!("  sub rax, {}", offset));
             asm.push(String::from("  push rax"));
@@ -34,7 +34,7 @@ impl Node {
                 asm.push(format!("  push {}", val));
                 return;
             }
-            NodeKind::Var(_) => {
+            NodeKind::LVar(_) => {
                 self.gen_lval(asm);
                 asm.push(String::from("  pop rax"));
                 asm.push(String::from("  mov rax, [rax]"));

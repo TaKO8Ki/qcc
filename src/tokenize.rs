@@ -28,67 +28,71 @@ impl Token {
         let chars_vec = p.chars().collect::<Vec<char>>();
         let mut chars_iter = chars.clone().enumerate();
 
-        let mut index = None;
         while let Some((i, p)) = chars_iter.next() {
-            index = Some(i);
+            log::debug!("tokens={:?}", tokens);
             if p.is_whitespace() {
                 continue;
             }
 
-            if let Some(index) = index {
-                let two_chars = format!(
-                    "{}{}",
-                    p,
-                    &chars_vec
-                        .get(index + 1)
-                        .map(|p| p.to_string())
-                        .unwrap_or_default()
-                );
-                log::debug!("two_chars={}", two_chars);
-                if two_chars.starts_with("==")
-                    || two_chars.starts_with("!=")
-                    || two_chars.starts_with("<=")
-                    || two_chars.starts_with(">=")
-                {
-                    let second = chars_iter.next();
-                    tokens.push(Token::new(
-                        TokenKind::Reserved,
-                        format!("{}{}", p, second.unwrap().1),
-                    ));
-                    continue;
+            if is_ident(p) {
+                let mut ident = p.to_string();
+                if let Some(next_c) = chars_vec.get(i + 1) {
+                    if !(is_ident(*next_c) || is_number(*next_c)) {
+                        tokens.push(Self::new(TokenKind::Ident, ident));
+                        continue;
+                    }
                 }
-            }
-
-            if 'a' <= p && p <= 'z' {
-                tokens.push(Self::new(TokenKind::Ident, p));
+                while let Some((i, c)) = chars_iter.next() {
+                    log::debug!("char={}", c);
+                    ident.push(c);
+                    if let Some(next_c) = chars_vec.get(i + 1) {
+                        if !(is_ident(*next_c) || is_number(*next_c)) {
+                            break;
+                        }
+                    }
+                }
+                tokens.push(Self::new(TokenKind::Ident, ident));
                 continue;
             }
 
-            if p == '+'
-                || p == '-'
-                || p == '*'
-                || p == '/'
-                || p == '('
-                || p == ')'
-                || p == ';'
-                || p == '='
-            {
-                tokens.push(Self::new(TokenKind::Reserved, p));
+            if is_op(p) {
+                let mut op = p.to_string();
+                if let Some(next_c) = chars_vec.get(i + 1) {
+                    if is_cmp_op(format!("{}{}", op, next_c)) {
+                        chars_iter.next();
+                        op.push(*next_c)
+                    };
+                }
+                tokens.push(Self::new(TokenKind::Reserved, op));
                 continue;
             }
 
             if p.is_digit(10) {
                 let mut number = vec![p];
-                let mut op = None;
-                while let Some((i, c)) = chars_iter.next() {
-                    index = Some(i);
-                    if !c.is_digit(10) {
-                        if !c.is_whitespace() {
-                            op = Some(c);
-                        }
-                        break;
+                if let Some(next_c) = chars_vec.get(i + 1) {
+                    if !next_c.is_digit(10) {
+                        tokens.push(Self::new(
+                            TokenKind::Num(
+                                number
+                                    .iter()
+                                    .collect::<String>()
+                                    .parse::<u16>()
+                                    .or_else(|_| {
+                                        Err(format!("cannot convert char to integer: {:?}", number))
+                                    })?,
+                            ),
+                            p,
+                        ));
+                        continue;
                     }
+                }
+                while let Some((i, c)) = chars_iter.next() {
                     number.push(c);
+                    if let Some(next_c) = chars_vec.get(i + 1) {
+                        if !next_c.is_digit(10) {
+                            break;
+                        }
+                    }
                 }
                 tokens.push(Self::new(
                     TokenKind::Num(number.iter().collect::<String>().parse::<u16>().or_else(
@@ -96,38 +100,13 @@ impl Token {
                     )?),
                     p,
                 ));
-                if let Some(op) = op {
-                    let two_chars = format!(
-                        "{}{}",
-                        op,
-                        chars_vec
-                            .get(index.unwrap() + 1)
-                            .map(|p| p.to_string())
-                            .unwrap_or_default()
-                    );
-                    log::debug!("two_chars_2={}", two_chars);
-                    if two_chars == "=="
-                        || two_chars == "!="
-                        || two_chars == "<="
-                        || two_chars == ">="
-                    {
-                        let second = chars_iter.next();
-                        tokens.push(Token::new(
-                            TokenKind::Reserved,
-                            format!("{}{}", op, second.unwrap().1),
-                        ));
-                        continue;
-                    } else {
-                        tokens.push(Self::new(TokenKind::Reserved, op));
-                    }
-                }
                 continue;
             };
             return Err(error_at(
                 chars
                     .clone()
                     .enumerate()
-                    .filter(|(idx, _)| idx <= &index.unwrap_or(0))
+                    .filter(|(idx, _)| idx <= &i)
                     .map(|(_, v)| v)
                     .collect(),
                 chars.clone().collect::<String>(),
@@ -138,4 +117,30 @@ impl Token {
         tokens.push(Self::new(TokenKind::Eof, ""));
         Ok(tokens)
     }
+}
+
+fn is_op(ch: char) -> bool {
+    ch == '+'
+        || ch == '-'
+        || ch == '*'
+        || ch == '/'
+        || ch == '('
+        || ch == ')'
+        || ch == ';'
+        || ch == '>'
+        || ch == '<'
+        || ch == '='
+        || ch == '!'
+}
+
+fn is_cmp_op(op: String) -> bool {
+    op == "==" || op == "!=" || op == "<=" || op == ">="
+}
+
+fn is_ident(ch: char) -> bool {
+    ('a'..='z').contains(&ch) || ('A'..='Z').contains(&ch) || ch == '_'
+}
+
+fn is_number(ch: char) -> bool {
+    ('0'..='9').contains(&ch)
 }

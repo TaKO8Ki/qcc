@@ -1,3 +1,4 @@
+use std::collections::LinkedList;
 use std::env;
 
 mod codegen;
@@ -23,15 +24,22 @@ enum NodeKind {
     Lt,
     Le,
     Assign,
-    Var(usize),
+    LVar(usize),
     Num(u16),
 }
 
 #[derive(Debug)]
 struct Tokens {
+    locals: LinkedList<LVar>,
     tokens: Vec<Token>,
     code: Vec<Node>,
     index: usize,
+}
+
+#[derive(Debug)]
+struct LVar {
+    name: String,
+    offset: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +72,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let mut tokens = Tokens::new(tokens);
+    log::debug!("tokens: {:?}", tokens);
     tokens.program();
 
     log::debug!("tokens: {:?}", tokens);
