@@ -34,6 +34,23 @@ impl Token {
                 continue;
             }
 
+            let return_token = chars_vec
+                .iter()
+                .enumerate()
+                .filter(|(idx, _)| idx >= &i && idx <= &(i + 6))
+                .map(|(_, ch)| ch)
+                .collect::<String>();
+            log::debug!("return={}", return_token);
+            if let Some(last) = return_token.chars().nth(6) {
+                if return_token.starts_with("return") && !(is_ident(last) || is_number(last)) {
+                    tokens.push(Self::new(TokenKind::Return, "return"));
+                    for _ in 0..6 {
+                        chars_iter.next();
+                    }
+                    continue;
+                }
+            }
+
             if is_ident(p) {
                 let mut ident = p.to_string();
                 if let Some(next_c) = chars_vec.get(i + 1) {

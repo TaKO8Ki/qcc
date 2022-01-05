@@ -9,6 +9,7 @@ mod tokenize;
 enum TokenKind {
     Reserved,
     Ident,
+    Return,
     Num(u16),
     Eof,
 }
@@ -24,6 +25,7 @@ enum NodeKind {
     Lt,
     Le,
     Assign,
+    Return,
     LVar(usize),
     Num(u16),
 }
@@ -72,10 +74,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let mut tokens = Tokens::new(tokens);
-    log::debug!("tokens: {:?}", tokens);
+    log::debug!("all tokens: {:?}", tokens);
     tokens.program();
 
-    log::debug!("tokens: {:?}", tokens);
+    log::debug!("parsed tokens: {:?}", tokens);
 
     Node::codegen(&mut asm, tokens.code);
 

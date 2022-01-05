@@ -55,6 +55,16 @@ impl Node {
                 asm.push(String::from("  push rdi"));
                 return;
             }
+            NodeKind::Return => {
+                if let Some(node) = self.lhs.as_ref() {
+                    node.gen(asm);
+                }
+                asm.push(String::from("  pop rax"));
+                asm.push(String::from("  mov rsp, rbp"));
+                asm.push(String::from("  pop rbp"));
+                asm.push(String::from("  ret"));
+                return;
+            }
             _ => (),
         }
 

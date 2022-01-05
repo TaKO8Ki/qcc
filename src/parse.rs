@@ -80,7 +80,15 @@ impl Tokens {
     }
 
     fn stmt(&mut self) -> Node {
-        let node = self.expr();
+        let node = if self.consume("return") {
+            Node {
+                kind: NodeKind::Return,
+                lhs: Some(Box::new(self.expr())),
+                rhs: None,
+            }
+        } else {
+            self.expr()
+        };
         log::debug!("node: {:?}", node);
         self.expect(';');
         node
@@ -202,7 +210,9 @@ impl Tokens {
     fn consume(&mut self, op: impl Into<String>) -> bool {
         let token = self.token();
         let op = op.into();
-        if token.kind != TokenKind::Reserved || token.str.to_string() != op {
+        if (token.kind != TokenKind::Reserved && token.kind != TokenKind::Return)
+            || token.str.to_string() != op
+        {
             return false;
         }
         self.next();
