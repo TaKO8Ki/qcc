@@ -107,6 +107,19 @@ impl Tokens {
             };
         }
 
+        self.expr_stmt()
+    }
+
+    fn expr_stmt(&mut self) -> Node {
+        if self.consume(';') {
+            return Node {
+                kind: NodeKind::Block,
+                lhs: None,
+                rhs: None,
+                body: None,
+            };
+        }
+
         let node = self.expr();
         self.expect(';');
         node

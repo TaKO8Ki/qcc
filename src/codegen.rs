@@ -66,8 +66,10 @@ impl Node {
                 return;
             }
             NodeKind::Block => {
-                for node in self.body.as_ref().unwrap().iter() {
-                    node.gen(asm);
+                if let Some(body) = self.body.as_ref() {
+                    for node in body.iter() {
+                        node.gen(asm);
+                    }
                 }
                 return;
             }
