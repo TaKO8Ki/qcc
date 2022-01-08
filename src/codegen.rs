@@ -12,7 +12,7 @@ impl Node {
 
         let mut count = 0;
         for node in code {
-            node.gen(asm, &mut count);
+            node.gen_stmt(asm, &mut count);
             asm.push(String::from("  pop rax"));
         }
 
@@ -29,7 +29,47 @@ impl Node {
         }
     }
 
-    pub fn gen(&self, asm: &mut Vec<String>, count: &mut usize) {
+    pub fn gen_stmt(&self, asm: &mut Vec<String>, count: &mut usize) {
+        match &self.kind {
+            NodeKind::Return => {
+                if let Some(node) = self.lhs.as_ref() {
+                    node.gen_expr(asm, count);
+                }
+                asm.push(String::from("  pop rax"));
+                asm.push(String::from("  mov rsp, rbp"));
+                asm.push(String::from("  pop rbp"));
+                asm.push(String::from("  ret"));
+                return;
+            }
+            NodeKind::Block => {
+                if let Some(body) = self.body.as_ref() {
+                    for node in body.iter() {
+                        node.gen_stmt(asm, count);
+                    }
+                }
+                return;
+            }
+            NodeKind::If { cond, then, els } => {
+                *count += 1;
+                let c = count.clone();
+                cond.gen_expr(asm, count);
+                asm.push(String::from("  pop rax"));
+                asm.push(String::from("  cmp rax, 0"));
+                asm.push(format!("  je .L.else{}", c));
+                then.gen_stmt(asm, count);
+                asm.push(format!("  jmp .L.end{}", c));
+                asm.push(format!(".L.else{}:", c));
+                if let Some(els) = els {
+                    els.gen_stmt(asm, count);
+                }
+                asm.push(format!(".L.end{}:", c));
+                return;
+            }
+            _ => self.gen_expr(asm, count),
+        }
+    }
+
+    pub fn gen_expr(&self, asm: &mut Vec<String>, count: &mut usize) {
         match &self.kind {
             NodeKind::Num(val) => {
                 asm.push(format!("  push {}", val));
@@ -47,7 +87,7 @@ impl Node {
                     node.gen_lval(asm);
                 }
                 if let Some(node) = self.rhs.as_ref() {
-                    node.gen(asm, count);
+                    node.gen_expr(asm, count);
                 }
 
                 asm.push(String::from("  pop rdi"));
@@ -56,48 +96,14 @@ impl Node {
                 asm.push(String::from("  push rdi"));
                 return;
             }
-            NodeKind::Return => {
-                if let Some(node) = self.lhs.as_ref() {
-                    node.gen(asm, count);
-                }
-                asm.push(String::from("  pop rax"));
-                asm.push(String::from("  mov rsp, rbp"));
-                asm.push(String::from("  pop rbp"));
-                asm.push(String::from("  ret"));
-                return;
-            }
-            NodeKind::Block => {
-                if let Some(body) = self.body.as_ref() {
-                    for node in body.iter() {
-                        node.gen(asm, count);
-                    }
-                }
-                return;
-            }
-            NodeKind::If { cond, then, els } => {
-                *count += 1;
-                let c = count.clone();
-                cond.gen(asm, count);
-                asm.push(String::from("  pop rax"));
-                asm.push(String::from("  cmp rax, 0"));
-                asm.push(format!("  je .L.else{}", c));
-                then.gen(asm, count);
-                asm.push(format!("  jmp .L.end{}", c));
-                asm.push(format!(".L.else{}:", c));
-                if let Some(els) = els {
-                    els.gen(asm, count);
-                }
-                asm.push(format!(".L.end{}:", c));
-                return;
-            }
             _ => (),
         }
 
         if let Some(node) = self.lhs.as_ref() {
-            node.gen(asm, count);
+            node.gen_expr(asm, count);
         }
         if let Some(node) = self.rhs.as_ref() {
-            node.gen(asm, count);
+            node.gen_expr(asm, count);
         }
         asm.push(String::from("  pop rdi"));
         asm.push(String::from("  pop rax"));
