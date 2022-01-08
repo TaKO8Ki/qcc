@@ -7,6 +7,7 @@ impl Node {
             kind,
             lhs: Some(Box::new(lhs)),
             rhs: Some(Box::new(rhs)),
+            body: Some(Box::new(Vec::new())),
         }
     }
 
@@ -15,6 +16,7 @@ impl Node {
             kind: NodeKind::Num(val),
             lhs: None,
             rhs: None,
+            body: Some(Box::new(Vec::new())),
         }
     }
 
@@ -23,6 +25,7 @@ impl Node {
             kind: NodeKind::LVar(offset),
             lhs: None,
             rhs: None,
+            body: Some(Box::new(Vec::new())),
         }
     }
 }
@@ -80,16 +83,31 @@ impl Tokens {
     }
 
     fn stmt(&mut self) -> Node {
-        let node = if self.consume("return") {
-            Node {
+        if self.consume("return") {
+            let node = Node {
                 kind: NodeKind::Return,
                 lhs: Some(Box::new(self.expr())),
                 rhs: None,
-            }
-        } else {
-            self.expr()
+                body: Some(Box::new(Vec::new())),
+            };
+            self.expect(';');
+            return node;
         };
-        log::debug!("node: {:?}", node);
+
+        if self.consume("{") {
+            let mut body = Vec::new();
+            while !self.consume("}") {
+                body.push(self.stmt());
+            }
+            return Node {
+                kind: NodeKind::Block,
+                lhs: None,
+                rhs: None,
+                body: Some(Box::new(body)),
+            };
+        }
+
+        let node = self.expr();
         self.expect(';');
         node
     }
@@ -201,7 +219,9 @@ impl Tokens {
     fn expect(&mut self, op: impl Into<String>) {
         let token = self.token();
         let op = op.into();
-        if token.kind != TokenKind::Reserved || token.str.to_string() != op {
+        if (token.kind != TokenKind::Keyword && token.kind != TokenKind::Punct)
+            || token.str.to_string() != op
+        {
             panic!("expected: {}, actual: {}", op, token.str);
         }
         self.next();
@@ -210,7 +230,7 @@ impl Tokens {
     fn consume(&mut self, op: impl Into<String>) -> bool {
         let token = self.token();
         let op = op.into();
-        if (token.kind != TokenKind::Reserved && token.kind != TokenKind::Return)
+        if (token.kind != TokenKind::Keyword && token.kind != TokenKind::Punct)
             || token.str.to_string() != op
         {
             return false;

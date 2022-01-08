@@ -65,6 +65,12 @@ impl Node {
                 asm.push(String::from("  ret"));
                 return;
             }
+            NodeKind::Block => {
+                for node in self.body.as_ref().unwrap().iter() {
+                    node.gen(asm);
+                }
+                return;
+            }
             _ => (),
         }
 

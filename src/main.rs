@@ -7,9 +7,9 @@ mod tokenize;
 
 #[derive(PartialEq, Clone, Debug)]
 enum TokenKind {
-    Reserved,
+    Keyword,
+    Punct,
     Ident,
-    Return,
     Num(u16),
     Eof,
 }
@@ -26,6 +26,7 @@ enum NodeKind {
     Le,
     Assign,
     Return,
+    Block,
     LVar(usize),
     Num(u16),
 }
@@ -53,6 +54,7 @@ struct Token {
 #[derive(Debug)]
 struct Node {
     kind: NodeKind,
+    body: Option<Box<Vec<Node>>>,
     lhs: Option<Box<Node>>,
     rhs: Option<Box<Node>>,
 }

@@ -43,7 +43,7 @@ impl Token {
             log::debug!("return={}", return_token);
             if let Some(last) = return_token.chars().nth(6) {
                 if return_token.starts_with("return") && !(is_ident(last) || is_number(last)) {
-                    tokens.push(Self::new(TokenKind::Return, "return"));
+                    tokens.push(Self::new(TokenKind::Keyword, "return"));
                     for _ in 0..6 {
                         chars_iter.next();
                     }
@@ -72,7 +72,7 @@ impl Token {
                 continue;
             }
 
-            if is_op(p) {
+            if is_punctuators(p) {
                 let mut op = p.to_string();
                 if let Some(next_c) = chars_vec.get(i + 1) {
                     if is_cmp_op(format!("{}{}", op, next_c)) {
@@ -80,7 +80,7 @@ impl Token {
                         op.push(*next_c)
                     };
                 }
-                tokens.push(Self::new(TokenKind::Reserved, op));
+                tokens.push(Self::new(TokenKind::Punct, op));
                 continue;
             }
 
@@ -136,7 +136,7 @@ impl Token {
     }
 }
 
-fn is_op(ch: char) -> bool {
+fn is_punctuators(ch: char) -> bool {
     ch == '+'
         || ch == '-'
         || ch == '*'
@@ -148,6 +148,8 @@ fn is_op(ch: char) -> bool {
         || ch == '<'
         || ch == '='
         || ch == '!'
+        || ch == '{'
+        || ch == '}'
 }
 
 fn is_cmp_op(op: String) -> bool {
