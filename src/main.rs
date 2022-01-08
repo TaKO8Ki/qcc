@@ -26,6 +26,11 @@ enum NodeKind {
     Le,
     Assign,
     Return,
+    If {
+        cond: Box<Node>,
+        then: Box<Node>,
+        els: Option<Box<Node>>,
+    },
     Block,
     LVar(usize),
     Num(u16),

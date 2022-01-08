@@ -83,6 +83,34 @@ impl Tokens {
     }
 
     fn stmt(&mut self) -> Node {
+        if self.consume("if") {
+            self.expect('(');
+            let cond = self.expr();
+            self.expect(')');
+            let then = self.stmt();
+            let mut node = Node {
+                kind: NodeKind::If {
+                    cond: Box::new(cond),
+                    then: Box::new(then),
+                    els: None,
+                },
+                body: None,
+                lhs: None,
+                rhs: None,
+            };
+            if self.consume("else") {
+                let els = self.stmt();
+                if let NodeKind::If { cond, then, .. } = node.kind {
+                    node.kind = NodeKind::If {
+                        cond: cond,
+                        then: then,
+                        els: Some(Box::new(els)),
+                    };
+                }
+            }
+            return node;
+        };
+
         if self.consume("return") {
             let node = Node {
                 kind: NodeKind::Return,

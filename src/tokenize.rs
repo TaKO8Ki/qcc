@@ -34,22 +34,22 @@ impl Token {
                 continue;
             }
 
-            let return_token = chars_vec
-                .iter()
-                .enumerate()
-                .filter(|(idx, _)| idx >= &i && idx <= &(i + 6))
-                .map(|(_, ch)| ch)
-                .collect::<String>();
-            log::debug!("return={}", return_token);
-            if let Some(last) = return_token.chars().nth(6) {
-                if return_token.starts_with("return") && !(is_ident(last) || is_number(last)) {
-                    tokens.push(Self::new(TokenKind::Keyword, "return"));
-                    for _ in 0..6 {
-                        chars_iter.next();
-                    }
-                    continue;
-                }
-            }
+            // let return_token = chars_vec
+            //     .iter()
+            //     .enumerate()
+            //     .filter(|(idx, _)| idx >= &i && idx <= &(i + 6))
+            //     .map(|(_, ch)| ch)
+            //     .collect::<String>();
+            // log::debug!("return={}", return_token);
+            // if let Some(last) = return_token.chars().nth(6) {
+            //     if return_token.starts_with("return") && !(is_ident(last) || is_number(last)) {
+            //         tokens.push(Self::new(TokenKind::Keyword, "return"));
+            //         for _ in 0..6 {
+            //             chars_iter.next();
+            //         }
+            //         continue;
+            //     }
+            // }
 
             if is_ident(p) {
                 let mut ident = p.to_string();
@@ -132,8 +132,13 @@ impl Token {
         }
 
         tokens.push(Self::new(TokenKind::Eof, ""));
+        convert_keywords(&mut tokens);
         Ok(tokens)
     }
+}
+
+fn is_keyword(token: impl Into<String>) -> bool {
+    ["return", "if", "else"].contains(&token.into().as_ref())
 }
 
 fn is_punctuators(ch: char) -> bool {
@@ -162,4 +167,14 @@ fn is_ident(ch: char) -> bool {
 
 fn is_number(ch: char) -> bool {
     ('0'..='9').contains(&ch)
+}
+
+fn convert_keywords(tokens: &mut Vec<Token>) {
+    for token in tokens.iter_mut() {
+        if let TokenKind::Ident = &token.kind {
+            if is_keyword(&token.str) {
+                token.kind = TokenKind::Keyword;
+            }
+        }
+    }
 }
