@@ -127,6 +127,36 @@ impl Tokens {
             };
         };
 
+        if self.consume("for") {
+            self.expect('(');
+            let init = self.stmt();
+            let mut cond = None;
+            let mut inc = None;
+
+            if !self.consume(';') {
+                cond = Some(self.expr());
+                self.expect(';');
+            }
+
+            if !self.consume(')') {
+                inc = Some(self.expr());
+                self.expect(')');
+            }
+
+            let then = self.stmt();
+            return Node {
+                kind: NodeKind::For {
+                    init: Box::new(init),
+                    cond: cond.map(|c| Box::new(c)),
+                    inc: inc.map(|i| Box::new(i)),
+                    then: Box::new(then),
+                },
+                body: None,
+                lhs: None,
+                rhs: None,
+            };
+        };
+
         if self.consume("return") {
             let node = Node {
                 kind: NodeKind::Return,

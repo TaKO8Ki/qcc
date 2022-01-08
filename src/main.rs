@@ -35,6 +35,12 @@ enum NodeKind {
         cond: Box<Node>,
         then: Box<Node>,
     },
+    For {
+        init: Box<Node>,
+        inc: Option<Box<Node>>,
+        cond: Option<Box<Node>>,
+        then: Box<Node>,
+    },
     Block,
     LVar(usize),
     Num(u16),

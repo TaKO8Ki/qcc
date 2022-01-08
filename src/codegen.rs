@@ -78,6 +78,30 @@ impl Node {
                 asm.push(format!(".L.end{}:", c));
                 return;
             }
+            NodeKind::For {
+                init,
+                cond,
+                inc,
+                then,
+            } => {
+                *count += 1;
+                let c = count.clone();
+                init.gen_expr(asm, count);
+                asm.push(format!(".L.begin{}:", c));
+                if let Some(cond) = cond {
+                    cond.gen_expr(asm, count);
+                    asm.push(String::from("  pop rax"));
+                    asm.push(String::from("  cmp rax, 0"));
+                    asm.push(format!("  je .L.end{}", c));
+                }
+                then.gen_stmt(asm, count);
+                if let Some(inc) = inc {
+                    inc.gen_expr(asm, count);
+                }
+                asm.push(format!("  jmp .L.begin{}", c));
+                asm.push(format!(".L.end{}:", c));
+                return;
+            }
             _ => self.gen_expr(asm, count),
         }
     }
