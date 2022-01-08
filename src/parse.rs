@@ -111,6 +111,22 @@ impl Tokens {
             return node;
         };
 
+        if self.consume("while") {
+            self.expect('(');
+            let cond = self.expr();
+            self.expect(')');
+            let then = self.stmt();
+            return Node {
+                kind: NodeKind::While {
+                    cond: Box::new(cond),
+                    then: Box::new(then),
+                },
+                body: None,
+                lhs: None,
+                rhs: None,
+            };
+        };
+
         if self.consume("return") {
             let node = Node {
                 kind: NodeKind::Return,

@@ -31,6 +31,10 @@ enum NodeKind {
         then: Box<Node>,
         els: Option<Box<Node>>,
     },
+    While {
+        cond: Box<Node>,
+        then: Box<Node>,
+    },
     Block,
     LVar(usize),
     Num(u16),

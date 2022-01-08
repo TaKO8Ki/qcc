@@ -65,6 +65,19 @@ impl Node {
                 asm.push(format!(".L.end{}:", c));
                 return;
             }
+            NodeKind::While { cond, then } => {
+                *count += 1;
+                let c = count.clone();
+                asm.push(format!(".L.begin{}:", c));
+                cond.gen_expr(asm, count);
+                asm.push(String::from("  pop rax"));
+                asm.push(String::from("  cmp rax, 0"));
+                asm.push(format!("  je .L.end{}", c));
+                then.gen_stmt(asm, count);
+                asm.push(format!("  jmp .L.begin{}", c));
+                asm.push(format!(".L.end{}:", c));
+                return;
+            }
             _ => self.gen_expr(asm, count),
         }
     }
