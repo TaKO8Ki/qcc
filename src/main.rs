@@ -41,6 +41,8 @@ enum NodeKind {
         cond: Option<Box<Node>>,
         then: Box<Node>,
     },
+    Deref,
+    Addr,
     Block,
     LVar(usize),
     Num(u16),
@@ -94,7 +96,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     log::debug!("all tokens: {:?}", tokens);
     tokens.program();
 
-    log::debug!("parsed tokens: {:?}", tokens);
+    log::debug!("parsed tokens: {:#?}", tokens);
 
     Node::codegen(&mut asm, tokens.code);
 

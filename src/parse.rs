@@ -232,6 +232,20 @@ impl Tokens {
             return self.primary();
         } else if self.consume("-") {
             return Node::new(NodeKind::Sub, Node::new_node_num(0), self.primary());
+        } else if self.consume("&") {
+            return Node {
+                kind: NodeKind::Addr,
+                lhs: Some(Box::new(self.unary())),
+                rhs: None,
+                body: None,
+            };
+        } else if self.consume("*") {
+            return Node {
+                kind: NodeKind::Deref,
+                lhs: Some(Box::new(self.unary())),
+                rhs: None,
+                body: None,
+            };
         }
         self.primary()
     }

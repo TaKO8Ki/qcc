@@ -21,11 +21,19 @@ impl Node {
         asm.push(String::from("  ret"));
     }
 
-    fn gen_lval(&self, asm: &mut Vec<String>) {
-        if let NodeKind::LVar(offset) = self.kind {
-            asm.push(String::from("  mov rax, rbp"));
-            asm.push(format!("  sub rax, {}", offset));
-            asm.push(String::from("  push rax"));
+    fn gen_lval(&self, asm: &mut Vec<String>, count: &mut usize) {
+        match self.kind {
+            NodeKind::LVar(offset) => {
+                asm.push(String::from("  mov rax, rbp"));
+                asm.push(format!("  sub rax, {}", offset));
+                asm.push(String::from("  push rax"));
+            }
+            NodeKind::Deref => {
+                if let Some(node) = self.lhs.as_ref() {
+                    node.gen_expr(asm, count);
+                }
+            }
+            _ => unreachable!("not lval"),
         }
     }
 
@@ -113,7 +121,7 @@ impl Node {
                 return;
             }
             NodeKind::LVar(_) => {
-                self.gen_lval(asm);
+                self.gen_lval(asm, count);
                 asm.push(String::from("  pop rax"));
                 asm.push(String::from("  mov rax, [rax]"));
                 asm.push(String::from("  push rax"));
@@ -121,7 +129,7 @@ impl Node {
             }
             NodeKind::Assign => {
                 if let Some(node) = self.lhs.as_ref() {
-                    node.gen_lval(asm);
+                    node.gen_lval(asm, count);
                 }
                 if let Some(node) = self.rhs.as_ref() {
                     node.gen_expr(asm, count);
@@ -131,6 +139,21 @@ impl Node {
                 asm.push(String::from("  pop rax"));
                 asm.push(String::from("  mov [rax], rdi"));
                 asm.push(String::from("  push rdi"));
+                return;
+            }
+            NodeKind::Addr => {
+                if let Some(node) = self.lhs.as_ref() {
+                    node.gen_lval(asm, count);
+                }
+                return;
+            }
+            NodeKind::Deref => {
+                if let Some(node) = self.lhs.as_ref() {
+                    node.gen_expr(asm, count);
+                }
+                asm.push(String::from("  pop rax"));
+                asm.push(String::from("  mov rax, [rax]"));
+                asm.push(String::from("  push rax"));
                 return;
             }
             _ => (),
