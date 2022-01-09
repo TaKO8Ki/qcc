@@ -4,6 +4,7 @@ use std::env;
 mod codegen;
 mod parse;
 mod tokenize;
+mod r#type;
 
 #[derive(PartialEq, Clone, Debug)]
 enum TokenKind {
@@ -48,6 +49,25 @@ enum NodeKind {
     Num(u16),
 }
 
+#[derive(Debug, Clone)]
+enum TypeKind {
+    Int,
+    Ptr(Box<Type>),
+}
+
+#[derive(Debug, Clone)]
+struct Type {
+    kind: TypeKind,
+}
+
+impl Type {
+    fn type_int() -> Self {
+        Self {
+            kind: TypeKind::Int,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Tokens {
     locals: LinkedList<LVar>,
@@ -74,6 +94,7 @@ struct Node {
     body: Option<Box<Vec<Node>>>,
     lhs: Option<Box<Node>>,
     rhs: Option<Box<Node>>,
+    ty: Option<Type>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
