@@ -139,6 +139,7 @@ fn is_punctuators(ch: char) -> bool {
         || ch == '{'
         || ch == '}'
         || ch == '&'
+        || ch == ','
 }
 
 fn is_cmp_op(op: String) -> bool {

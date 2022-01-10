@@ -399,11 +399,7 @@ impl Tokens {
 
         if let TokenKind::Ident = self.token().kind {
             if self.next_equal("(") {
-                let node = Node::new(NodeKind::FuncCall(self.token().str.clone()));
-                self.next();
-                self.next();
-                self.expect(')');
-                return node;
+                return self.funcall();
             }
 
             let lvar = self.find_lvar();
@@ -427,6 +423,25 @@ impl Tokens {
         }
 
         panic!("primary: unexpected token {:?}", self.token());
+    }
+
+    fn funcall(&mut self) -> Node {
+        let start = self.token().clone();
+        self.next();
+        self.next();
+        let mut args = Vec::new();
+        while !self.consume(')') {
+            if args.len() > 0 {
+                log::debug!("args len={}", args.len());
+                self.expect(',');
+            }
+            args.push(self.assign());
+        }
+        log::debug!("tokentokentoken={:?}", self.token());
+        Node::new(NodeKind::FuncCall {
+            name: start.str,
+            args,
+        })
     }
 
     fn equality(&mut self) -> Node {

@@ -1,4 +1,4 @@
-use crate::{Node, NodeKind};
+use crate::{Node, NodeKind, ARG_REG};
 
 impl Node {
     pub fn codegen(asm: &mut Vec<String>, code: Vec<Node>) {
@@ -156,7 +156,17 @@ impl Node {
                 asm.push(String::from("  push rax"));
                 return;
             }
-            NodeKind::FuncCall(name) => {
+            NodeKind::FuncCall { name, args } => {
+                let mut nargs = 0;
+                for arg in args {
+                    arg.gen_expr(asm, count);
+                    nargs += 1;
+                }
+
+                for i in (0..nargs).rev() {
+                    asm.push(format!("  pop {}", ARG_REG[i]));
+                }
+
                 asm.push(String::from("  mov rax, 0"));
                 asm.push(format!("  call {}", name));
                 asm.push(String::from("  push rax"));

@@ -53,7 +53,7 @@ impl Node {
             | NodeKind::Le
             | NodeKind::LVar(_)
             | NodeKind::Num(_)
-            | NodeKind::FuncCall(_) => self.ty = Some(Type::type_int()),
+            | NodeKind::FuncCall { .. } => self.ty = Some(Type::type_int()),
             NodeKind::Addr => {
                 self.ty = self
                     .lhs
