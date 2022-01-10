@@ -18,6 +18,7 @@ impl Type {
 
     pub fn pointer_to(self) -> Self {
         Self {
+            name: None,
             kind: TypeKind::Ptr(Box::new(self)),
         }
     }

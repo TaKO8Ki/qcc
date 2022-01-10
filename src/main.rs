@@ -45,6 +45,7 @@ enum NodeKind {
     Deref,
     Addr,
     Block,
+    ExprStmt,
     LVar(usize),
     Num(u16),
 }
@@ -58,12 +59,14 @@ enum TypeKind {
 #[derive(Debug, Clone)]
 struct Type {
     kind: TypeKind,
+    name: Option<Token>,
 }
 
 impl Type {
     fn type_int() -> Self {
         Self {
             kind: TypeKind::Int,
+            name: None,
         }
     }
 }
@@ -76,10 +79,11 @@ struct Tokens {
     index: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct LVar {
     name: String,
     offset: usize,
+    ty: Type,
 }
 
 #[derive(Debug, Clone)]

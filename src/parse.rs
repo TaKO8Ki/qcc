@@ -1,6 +1,15 @@
 use crate::{LVar, Node, NodeKind, Token, TokenKind, Tokens, Type};
 use std::collections::LinkedList;
 
+impl Token {
+    fn get_ident(&self) -> Option<String> {
+        match self.kind {
+            TokenKind::Ident => Some(self.str.clone()),
+            _ => None,
+        }
+    }
+}
+
 impl Node {
     fn new(kind: NodeKind) -> Self {
         Node {
@@ -42,13 +51,13 @@ impl Node {
         }
     }
 
-    fn new_node_var(offset: usize) -> Self {
+    fn new_lvar(offset: usize, ty: Type) -> Self {
         Node {
             kind: NodeKind::LVar(offset),
             lhs: None,
             rhs: None,
             body: None,
-            ty: None,
+            ty: Some(ty),
         }
     }
 
@@ -180,6 +189,66 @@ impl Tokens {
         }
     }
 
+    fn add_lvar(&mut self, name: String, ty: Type) -> LVar {
+        let lvar = LVar {
+            name,
+            offset: self.locals.front().map_or(0, |lvar| lvar.offset) + 8,
+            ty,
+        };
+        self.locals.push_front(lvar.clone());
+        lvar
+    }
+
+    fn declspec(&mut self) -> Type {
+        self.expect("int");
+        Type::type_int()
+    }
+
+    fn declarator(&mut self, ty: Type) -> Type {
+        let mut ty = ty;
+        while self.consume('*') {
+            ty = ty.pointer_to();
+        }
+
+        if !matches!(self.token().kind, TokenKind::Ident) {
+            panic!("expected a variable name, got {:?}", self.token());
+        }
+
+        ty.name = Some(self.token().clone());
+        self.next();
+        ty
+    }
+
+    fn declaration(&mut self) -> Node {
+        let basety = self.declspec();
+        let mut body = Vec::new();
+
+        let mut i = 0;
+        while !self.consume(';') {
+            if i > 0 {
+                self.expect(',');
+            }
+            i += 1;
+
+            let ty = self.declarator(basety.clone());
+            let lvar = self.add_lvar(ty.clone().name.unwrap().get_ident().unwrap(), ty.clone());
+            let lhs = Node::new_lvar(lvar.offset, ty);
+
+            if !self.consume('=') {
+                continue;
+            }
+
+            let rhs = self.assign();
+            let node = Node::new_binary(NodeKind::Assign, lhs, rhs);
+            body.push(Node::new_unary(NodeKind::ExprStmt, node));
+        }
+
+        log::debug!("body={:?}", body);
+        let node = Node::new_block(Some(body));
+        log::debug!("declaration last token={:?}", self.token());
+        node
+    }
+
     fn stmt(&mut self) -> Node {
         if self.consume("if") {
             self.expect('(');
@@ -249,7 +318,16 @@ impl Tokens {
         if self.consume("{") {
             let mut body = Vec::new();
             while !self.consume("}") {
-                body.push(self.stmt());
+                body.push(if self.equal("int") {
+                    log::debug!(
+                        "declaration, token={:?}, index={}",
+                        self.token(),
+                        self.index
+                    );
+                    self.declaration()
+                } else {
+                    self.stmt()
+                });
             }
             return Node::new_block(Some(body));
         }
@@ -318,16 +396,12 @@ impl Tokens {
         if let TokenKind::Ident = self.token().kind {
             let lvar = self.find_lvar();
             let node = match lvar {
-                Some(lvar) => Node::new_node_var(lvar.offset),
-                None => {
-                    let lvar = LVar {
-                        name: self.token().str.clone(),
-                        offset: self.locals.front().map_or(0, |lvar| lvar.offset) + 8,
-                    };
-                    let node = Node::new_node_var(lvar.offset);
-                    self.locals.push_front(lvar);
-                    node
-                }
+                Some(lvar) => Node::new_lvar(lvar.offset, lvar.ty.clone()),
+                None => panic!(
+                    "undefined variable: {:?}, locals={:?}",
+                    self.token(),
+                    self.locals
+                ),
             };
 
             self.next();
@@ -381,7 +455,7 @@ impl Tokens {
         if (token.kind != TokenKind::Keyword && token.kind != TokenKind::Punct)
             || token.str.to_string() != op
         {
-            panic!("expected: {}, actual: {}", op, token.str);
+            panic!("expected: `{}`, actual: `{}`", op, token.str);
         }
         self.next();
     }
@@ -395,6 +469,17 @@ impl Tokens {
             return false;
         }
         self.next();
+        true
+    }
+
+    fn equal(&mut self, op: impl Into<String>) -> bool {
+        let token = self.token();
+        let op = op.into();
+        if (token.kind != TokenKind::Keyword && token.kind != TokenKind::Punct)
+            || token.str.to_string() != op
+        {
+            return false;
+        }
         true
     }
 }
