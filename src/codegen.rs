@@ -156,6 +156,12 @@ impl Node {
                 asm.push(String::from("  push rax"));
                 return;
             }
+            NodeKind::FuncCall(name) => {
+                asm.push(String::from("  mov rax, 0"));
+                asm.push(format!("  call {}", name));
+                asm.push(String::from("  push rax"));
+                return;
+            }
             _ => (),
         }
 

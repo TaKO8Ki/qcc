@@ -152,6 +152,10 @@ impl Tokens {
         self.tokens.get(self.index - 1)
     }
 
+    fn next_token(&self) -> Option<&Token> {
+        self.tokens.get(self.index + 1)
+    }
+
     fn find_lvar(&self) -> Option<&LVar> {
         for lvar in self.locals.iter() {
             if lvar.name.len() == self.token().str.len() && lvar.name == self.token().str {
@@ -394,6 +398,14 @@ impl Tokens {
         }
 
         if let TokenKind::Ident = self.token().kind {
+            if self.next_equal("(") {
+                let node = Node::new(NodeKind::FuncCall(self.token().str.clone()));
+                self.next();
+                self.next();
+                self.expect(')');
+                return node;
+            }
+
             let lvar = self.find_lvar();
             let node = match lvar {
                 Some(lvar) => Node::new_lvar(lvar.offset, lvar.ty.clone()),
@@ -479,6 +491,18 @@ impl Tokens {
             || token.str.to_string() != op
         {
             return false;
+        }
+        true
+    }
+
+    fn next_equal(&mut self, op: impl Into<String>) -> bool {
+        if let Some(token) = self.next_token() {
+            let op = op.into();
+            if (token.kind != TokenKind::Keyword && token.kind != TokenKind::Punct)
+                || token.str.to_string() != op
+            {
+                return false;
+            }
         }
         true
     }

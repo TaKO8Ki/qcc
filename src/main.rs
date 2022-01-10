@@ -46,6 +46,7 @@ enum NodeKind {
     Addr,
     Block,
     ExprStmt,
+    FuncCall(String),
     LVar(usize),
     Num(u16),
 }
