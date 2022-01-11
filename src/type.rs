@@ -22,6 +22,13 @@ impl Type {
             kind: TypeKind::Ptr(Box::new(self)),
         }
     }
+
+    pub fn func_type(&self) -> Self {
+        Self {
+            name: None,
+            kind: TypeKind::Func(Some(Box::new(self.clone()))),
+        }
+    }
 }
 
 impl Node {

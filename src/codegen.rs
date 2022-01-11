@@ -1,24 +1,26 @@
-use crate::{Node, NodeKind, ARG_REG};
+use std::collections::LinkedList;
+
+use crate::{Function, Node, NodeKind, ARG_REG};
 
 impl Node {
-    pub fn codegen(asm: &mut Vec<String>, code: Vec<Node>) {
-        asm.push(String::from(".intel_syntax noprefix"));
-        asm.push(String::from(".globl main"));
-        asm.push(String::from("main:"));
-
-        asm.push(String::from("  push rbp"));
-        asm.push(String::from("  mov rbp, rsp"));
-        asm.push(String::from("  sub rsp, 208"));
-
+    pub fn codegen(asm: &mut Vec<String>, functions: LinkedList<Function>) {
         let mut count = 0;
-        for node in code {
-            node.gen_stmt(asm, &mut count);
-            asm.push(String::from("  pop rax"));
-        }
+        for func in functions.iter() {
+            asm.push(String::from(".intel_syntax noprefix"));
+            asm.push(format!(".globl {}", func.name));
+            asm.push(format!("{}:", func.name));
 
-        asm.push(String::from("  mov rsp, rbp"));
-        asm.push(String::from("  pop rbp"));
-        asm.push(String::from("  ret"));
+            asm.push(String::from("  push rbp"));
+            asm.push(String::from("  mov rbp, rsp"));
+            asm.push(String::from("  sub rsp, 208"));
+
+            func.body.gen_stmt(asm, &mut count);
+            asm.push(String::from("  pop rax"));
+
+            asm.push(String::from("  mov rsp, rbp"));
+            asm.push(String::from("  pop rbp"));
+            asm.push(String::from("  ret"));
+        }
     }
 
     fn gen_lval(&self, asm: &mut Vec<String>, count: &mut usize) {

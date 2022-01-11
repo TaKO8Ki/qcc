@@ -1,4 +1,4 @@
-use crate::{LVar, Node, NodeKind, Token, TokenKind, Tokens, Type};
+use crate::{Function, LVar, Node, NodeKind, Token, TokenKind, Tokens, Type};
 use std::collections::LinkedList;
 
 impl Token {
@@ -143,7 +143,7 @@ impl Tokens {
             locals: LinkedList::new(),
             tokens,
             index: 0,
-            code: Vec::new(),
+            functions: LinkedList::new(),
         }
     }
 
@@ -188,9 +188,10 @@ impl Tokens {
                 break;
             }
 
-            let stmt = self.stmt();
-            self.code.push(stmt);
+            let function = self.function();
+            self.functions.push_back(function);
         }
+        log::debug!("functions={:?}", self.functions);
     }
 
     fn add_lvar(&mut self, name: String, ty: Type) -> LVar {
@@ -208,6 +209,14 @@ impl Tokens {
         Type::type_int()
     }
 
+    fn type_suffix(&mut self, ty: Type) -> Type {
+        if self.consume("(") {
+            self.expect(')');
+            return ty.func_type();
+        }
+        ty
+    }
+
     fn declarator(&mut self, ty: Type) -> Type {
         let mut ty = ty;
         while self.consume('*') {
@@ -218,8 +227,11 @@ impl Tokens {
             panic!("expected a variable name, got {:?}", self.token());
         }
 
-        ty.name = Some(self.token().clone());
+        let func_name = self.token().clone();
         self.next();
+        log::debug!("declarator token={:?}", self.token());
+        let mut ty = self.type_suffix(ty);
+        ty.name = Some(func_name);
         ty
     }
 
@@ -320,23 +332,27 @@ impl Tokens {
         };
 
         if self.consume("{") {
-            let mut body = Vec::new();
-            while !self.consume("}") {
-                body.push(if self.equal("int") {
-                    log::debug!(
-                        "declaration, token={:?}, index={}",
-                        self.token(),
-                        self.index
-                    );
-                    self.declaration()
-                } else {
-                    self.stmt()
-                });
-            }
-            return Node::new_block(Some(body));
+            return self.compound_stmt();
         }
 
         self.expr_stmt()
+    }
+
+    fn compound_stmt(&mut self) -> Node {
+        let mut body = Vec::new();
+        while !self.consume("}") {
+            body.push(if self.equal("int") {
+                log::debug!(
+                    "declaration, token={:?}, index={}",
+                    self.token(),
+                    self.index
+                );
+                self.declaration()
+            } else {
+                self.stmt()
+            });
+        }
+        Node::new_block(Some(body))
     }
 
     fn expr_stmt(&mut self) -> Node {
@@ -423,6 +439,25 @@ impl Tokens {
         }
 
         panic!("primary: unexpected token {:?}", self.token());
+    }
+
+    fn function(&mut self) -> Function {
+        let ty = self.declspec();
+        let ty = self.declarator(ty);
+
+        log::debug!("function token={:?}", self.token());
+
+        self.locals = LinkedList::new();
+        let name = ty.clone().name.unwrap().get_ident().unwrap();
+
+        log::debug!("function name={:?}", name);
+
+        self.expect('{');
+        Function {
+            name,
+            body: self.compound_stmt(),
+            locals: self.locals.clone(),
+        }
     }
 
     fn funcall(&mut self) -> Node {
