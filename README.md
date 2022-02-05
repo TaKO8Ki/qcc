@@ -12,3 +12,7 @@ $ ./tmp
 $ echo $?
 32
 ```
+
+## Reference
+
+https://github.com/rui314/chibicc
