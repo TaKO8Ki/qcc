@@ -23,10 +23,13 @@ impl Type {
         }
     }
 
-    pub fn func_type(&self) -> Self {
+    pub fn func_type(&self, params: Vec<Type>) -> Self {
         Self {
             name: None,
-            kind: TypeKind::Func(Some(Box::new(self.clone()))),
+            kind: TypeKind::Func {
+                params: Box::new(params),
+                return_ty: Some(Box::new(self.clone())),
+            },
         }
     }
 }
@@ -47,6 +50,18 @@ impl Node {
         if let Some(body) = self.body.as_mut() {
             for node in body.iter_mut() {
                 node.add_type();
+            }
+        }
+
+        if let Some(body) = self.body.as_mut() {
+            for node in body.iter_mut() {
+                node.add_type();
+            }
+        }
+
+        if let NodeKind::FuncCall { args, .. } = &mut self.kind {
+            for arg in args.iter_mut() {
+                arg.add_type();
             }
         }
 

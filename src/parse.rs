@@ -1,4 +1,4 @@
-use crate::{Function, LVar, Node, NodeKind, Token, TokenKind, Tokens, Type};
+use crate::{Function, LVar, Node, NodeKind, Token, TokenKind, Tokens, Type, TypeKind};
 use std::collections::LinkedList;
 
 impl Token {
@@ -51,9 +51,9 @@ impl Node {
         }
     }
 
-    fn new_lvar(offset: usize, ty: Type) -> Self {
+    fn new_lvar(lvar: LVar, ty: Type) -> Self {
         Node {
-            kind: NodeKind::LVar(offset),
+            kind: NodeKind::LVar(lvar),
             lhs: None,
             rhs: None,
             body: None,
@@ -211,8 +211,19 @@ impl Tokens {
 
     fn type_suffix(&mut self, ty: Type) -> Type {
         if self.consume("(") {
-            self.expect(')');
-            return ty.func_type();
+            let mut params = Vec::new();
+
+            while !self.consume(')') {
+                log::debug!("type_suffix token={:?}", self.token());
+                if params.len() > 0 {
+                    self.expect(",");
+                }
+                let basety = self.declspec();
+                let ty = self.declarator(basety);
+                params.push(ty);
+            }
+
+            return ty.func_type(params);
         }
         ty
     }
@@ -248,7 +259,7 @@ impl Tokens {
 
             let ty = self.declarator(basety.clone());
             let lvar = self.add_lvar(ty.clone().name.unwrap().get_ident().unwrap(), ty.clone());
-            let lhs = Node::new_lvar(lvar.offset, ty);
+            let lhs = Node::new_lvar(lvar, ty);
 
             if !self.consume('=') {
                 continue;
@@ -420,7 +431,7 @@ impl Tokens {
 
             let lvar = self.find_lvar();
             let node = match lvar {
-                Some(lvar) => Node::new_lvar(lvar.offset, lvar.ty.clone()),
+                Some(lvar) => Node::new_lvar(lvar.clone(), lvar.ty.clone()),
                 None => panic!(
                     "undefined variable: {:?}, locals={:?}",
                     self.token(),
@@ -444,20 +455,33 @@ impl Tokens {
     fn function(&mut self) -> Function {
         let ty = self.declspec();
         let ty = self.declarator(ty);
-
-        log::debug!("function token={:?}", self.token());
-
         self.locals = LinkedList::new();
-        let name = ty.clone().name.unwrap().get_ident().unwrap();
 
-        log::debug!("function name={:?}", name);
+        if let TypeKind::Func { params, .. } = ty.clone().kind {
+            let mut func_params = LinkedList::new();
 
-        self.expect('{');
-        Function {
-            name,
-            body: self.compound_stmt(),
-            locals: self.locals.clone(),
+            log::debug!("function params={:?}", params);
+            for param in params.iter() {
+                let lvar = self.add_lvar(
+                    param.clone().name.unwrap().get_ident().unwrap(),
+                    param.clone(),
+                );
+                func_params.push_back(lvar.clone())
+            }
+            log::debug!("function token={:?}", self.token());
+
+            let name = ty.clone().name.unwrap().get_ident().unwrap();
+            log::debug!("function name={:?}", name);
+
+            self.expect('{');
+            return Function {
+                name,
+                body: self.compound_stmt(),
+                params: func_params,
+                locals: self.locals.clone(),
+            };
         }
+        unreachable!("ty is not function")
     }
 
     fn funcall(&mut self) -> Node {

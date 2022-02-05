@@ -52,14 +52,17 @@ enum NodeKind {
         name: String,
         args: Vec<Node>,
     },
-    LVar(usize),
+    LVar(LVar),
     Num(u16),
 }
 
 #[derive(Debug, Clone)]
 enum TypeKind {
     Int,
-    Func(Option<Box<Type>>),
+    Func {
+        params: Box<Vec<Type>>,
+        return_ty: Option<Box<Type>>,
+    },
     Ptr(Box<Type>),
 }
 
@@ -90,6 +93,7 @@ struct Tokens {
 struct Function {
     name: String,
     body: Node,
+    params: LinkedList<LVar>,
     locals: LinkedList<LVar>,
 }
 
@@ -137,7 +141,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     log::debug!("parsed tokens: {:#?}", tokens);
 
-    Node::codegen(&mut asm, tokens.functions);
+    codegen::codegen(&mut asm, tokens.functions);
 
     println!("{}", asm.join("\n"));
     Ok(())
