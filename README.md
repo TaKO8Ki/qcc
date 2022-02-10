@@ -6,11 +6,11 @@ $ docker run --rm -it --user "$(id -u)":"$(id -g)" -v "$PWD":/usr/src/myapp -w /
 ```
 
 ```sh
-$ ./target/release/qcc 'int main() { return ret32(); } int ret32() { return 32; }' > tmp.s
+$ ./target/release/qcc 'int main() { return fib(9); } int fib(int x) { if (x<=1) return 1; return fib(x-1) + fib(x-2); }' > tmp.s
 $ cc -o tmp tmp.s
 $ ./tmp
 $ echo $?
-32
+55
 ```
 
 ## Reference

@@ -1,17 +1,33 @@
 use crate::{Node, NodeKind, Type, TypeKind};
 
 impl Type {
+    pub fn type_int() -> Self {
+        Self {
+            kind: TypeKind::Int { size: 8 },
+            name: None,
+        }
+    }
+
     pub fn is_integer(&self) -> bool {
-        matches!(self.kind, TypeKind::Int)
+        matches!(self.kind, TypeKind::Int { .. })
     }
 
     pub fn is_pointer(&self) -> bool {
-        matches!(self.kind, TypeKind::Ptr(_))
+        matches!(self.kind, TypeKind::Ptr { .. })
     }
 
     pub fn base(&self) -> Option<Type> {
         match &self.kind {
-            TypeKind::Ptr(base) => Some(*base.clone()),
+            TypeKind::Ptr { base, .. } | TypeKind::Array { base, .. } => Some(*base.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn size(&self) -> Option<u16> {
+        match &self.kind {
+            TypeKind::Int { size, .. }
+            | TypeKind::Ptr { size, .. }
+            | TypeKind::Array { size, .. } => Some(size.clone()),
             _ => None,
         }
     }
@@ -19,7 +35,10 @@ impl Type {
     pub fn pointer_to(self) -> Self {
         Self {
             name: None,
-            kind: TypeKind::Ptr(Box::new(self)),
+            kind: TypeKind::Ptr {
+                size: 8,
+                base: Box::new(self),
+            },
         }
     }
 
@@ -30,6 +49,20 @@ impl Type {
                 params: Box::new(params),
                 return_ty: Some(Box::new(self.clone())),
             },
+        }
+    }
+
+    pub fn array_of(self, len: u16) -> Self {
+        match self.size() {
+            Some(size) => Self {
+                name: None,
+                kind: TypeKind::Array {
+                    base: Box::new(self),
+                    size: size * len,
+                    len,
+                },
+            },
+            None => unreachable!("size does not exist"),
         }
     }
 }
@@ -66,7 +99,17 @@ impl Node {
         }
 
         match self.kind {
-            NodeKind::Add | NodeKind::Sub | NodeKind::Mul | NodeKind::Div | NodeKind::Assign => {
+            NodeKind::Add | NodeKind::Sub | NodeKind::Mul | NodeKind::Div => {
+                self.ty = self.lhs.as_ref().map(|lhs| lhs.ty.clone()).flatten()
+            }
+            NodeKind::Assign => {
+                if let Some(lhs) = &self.lhs {
+                    if let Some(ty) = &lhs.ty {
+                        if let TypeKind::Array { .. } = ty.kind {
+                            panic!("not an lvalue");
+                        }
+                    }
+                }
                 self.ty = self.lhs.as_ref().map(|lhs| lhs.ty.clone()).flatten()
             }
             NodeKind::Eq
@@ -77,11 +120,20 @@ impl Node {
             | NodeKind::Num(_)
             | NodeKind::FuncCall { .. } => self.ty = Some(Type::type_int()),
             NodeKind::Addr => {
-                self.ty = self
+                self.ty = if let Some(TypeKind::Array { base, .. }) = self
                     .lhs
                     .as_ref()
-                    .map(|lhs| lhs.ty.clone().map(|ty| ty.pointer_to()))
+                    .map(|lhs| lhs.ty.as_ref())
                     .flatten()
+                    .map(|ty| ty.clone().kind)
+                {
+                    Some(base.pointer_to())
+                } else {
+                    self.lhs
+                        .as_ref()
+                        .map(|lhs| lhs.ty.clone().map(|ty| ty.pointer_to()))
+                        .flatten()
+                };
             }
             NodeKind::Deref => {
                 if let Some(base) = self

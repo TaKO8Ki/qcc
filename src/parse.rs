@@ -79,6 +79,7 @@ impl Node {
         rhs.add_type();
 
         if let Some(lhs_ty) = &lhs.ty {
+            let lhs_ty = lhs_ty.clone();
             if let Some(rhs_ty) = &rhs.ty {
                 if lhs_ty.is_integer() && rhs_ty.is_integer() {
                     return Node::new_binary(NodeKind::Add, lhs, rhs);
@@ -93,14 +94,20 @@ impl Node {
                     lhs = rhs;
                     rhs = tmp;
                 }
+
+                return Node::new_binary(
+                    NodeKind::Add,
+                    lhs,
+                    Node::new_binary(
+                        NodeKind::Mul,
+                        rhs,
+                        Self::new_node_num(lhs_ty.base().unwrap().size().unwrap()),
+                    ),
+                );
             }
         }
 
-        Node::new_binary(
-            NodeKind::Add,
-            lhs,
-            Node::new_binary(NodeKind::Mul, rhs, Self::new_node_num(8)),
-        )
+        unreachable!("invalid operands")
     }
 
     fn new_sub(lhs: Node, rhs: Node) -> Self {
@@ -116,19 +123,31 @@ impl Node {
                     return Node::new_binary(NodeKind::Sub, lhs, rhs);
                 }
 
-                if lhs_ty.is_pointer() && rhs_ty.is_integer() {
-                    let mut rhs = Node::new_binary(NodeKind::Mul, rhs, Self::new_node_num(8));
-                    rhs.add_type();
-                    let ty = lhs.ty.clone();
-                    let mut node = Node::new_binary(NodeKind::Sub, lhs, rhs);
-                    node.ty = ty;
-                    return node;
+                if rhs_ty.is_integer() {
+                    if let TypeKind::Ptr { base, .. } = &lhs_ty.kind {
+                        let mut rhs = Node::new_binary(
+                            NodeKind::Mul,
+                            rhs,
+                            Self::new_node_num(base.size().unwrap()),
+                        );
+                        rhs.add_type();
+                        let ty = lhs.ty.clone();
+                        let mut node = Node::new_binary(NodeKind::Sub, lhs, rhs);
+                        node.ty = ty;
+                        return node;
+                    }
                 }
 
-                if lhs_ty.is_pointer() && rhs_ty.is_pointer() {
-                    let mut node = Node::new_binary(NodeKind::Sub, lhs, rhs);
-                    node.ty = Some(Type::type_int());
-                    return Node::new_binary(NodeKind::Div, node, Self::new_node_num(8));
+                if rhs_ty.is_pointer() {
+                    if let TypeKind::Ptr { base, .. } = &lhs_ty.clone().kind {
+                        let mut node = Node::new_binary(NodeKind::Sub, lhs, rhs);
+                        node.ty = Some(Type::type_int());
+                        return Node::new_binary(
+                            NodeKind::Div,
+                            node,
+                            Self::new_node_num(base.size().unwrap()),
+                        );
+                    }
                 }
             }
         }
@@ -197,11 +216,18 @@ impl Tokens {
     fn add_lvar(&mut self, name: String, ty: Type) -> LVar {
         let lvar = LVar {
             name,
-            offset: self.locals.front().map_or(0, |lvar| lvar.offset) + 8,
+            offset: self.locals.front().map_or(0, |lvar| lvar.offset) + ty.size().unwrap() as usize,
             ty,
         };
         self.locals.push_front(lvar.clone());
         lvar
+    }
+
+    fn get_number(&self) -> u16 {
+        if let TokenKind::Num(val) = self.token().kind {
+            return val;
+        }
+        unreachable!("expected a number: {:?}", self.token());
     }
 
     fn declspec(&mut self) -> Type {
@@ -209,21 +235,33 @@ impl Tokens {
         Type::type_int()
     }
 
+    fn func_params(&mut self, ty: Type) -> Type {
+        let mut params = Vec::new();
+
+        while !self.consume(')') {
+            log::debug!("type_suffix token={:?}", self.token());
+            if params.len() > 0 {
+                self.expect(",");
+            }
+            let basety = self.declspec();
+            let ty = self.declarator(basety);
+            params.push(ty);
+        }
+
+        ty.func_type(params)
+    }
+
     fn type_suffix(&mut self, ty: Type) -> Type {
         if self.consume("(") {
-            let mut params = Vec::new();
+            return self.func_params(ty);
+        }
 
-            while !self.consume(')') {
-                log::debug!("type_suffix token={:?}", self.token());
-                if params.len() > 0 {
-                    self.expect(",");
-                }
-                let basety = self.declspec();
-                let ty = self.declarator(basety);
-                params.push(ty);
-            }
-
-            return ty.func_type(params);
+        if self.consume('[') {
+            let sz = self.get_number();
+            self.next();
+            self.expect(']');
+            log::debug!("type_suffix ty={:?}", ty);
+            return ty.array_of(sz);
         }
         ty
     }

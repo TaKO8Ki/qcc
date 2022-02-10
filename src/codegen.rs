@@ -1,6 +1,6 @@
 use std::collections::LinkedList;
 
-use crate::{Function, Node, NodeKind, ARG_REG};
+use crate::{Function, Node, NodeKind, TypeKind, ARG_REG};
 
 pub(crate) fn codegen(asm: &mut Vec<String>, functions: LinkedList<Function>) {
     let mut count = 0;
@@ -42,6 +42,15 @@ impl Function {
 }
 
 impl Node {
+    fn load(&self, asm: &mut Vec<String>) {
+        if let Some(ty) = &self.ty {
+            if let TypeKind::Array { .. } = ty.kind {
+                return;
+            }
+        }
+        asm.push(String::from("  mov rax, [rax]"))
+    }
+
     fn gen_lval(&self, asm: &mut Vec<String>, count: &mut usize) {
         match &self.kind {
             NodeKind::LVar(lvar) => {
@@ -144,7 +153,7 @@ impl Node {
             NodeKind::LVar(_) => {
                 self.gen_lval(asm, count);
                 asm.push(String::from("  pop rax"));
-                asm.push(String::from("  mov rax, [rax]"));
+                self.load(asm);
                 asm.push(String::from("  push rax"));
                 return;
             }
@@ -173,7 +182,7 @@ impl Node {
                     node.gen_expr(asm, count);
                 }
                 asm.push(String::from("  pop rax"));
-                asm.push(String::from("  mov rax, [rax]"));
+                self.load(asm);
                 asm.push(String::from("  push rax"));
                 return;
             }

@@ -58,27 +58,28 @@ enum NodeKind {
 
 #[derive(Debug, Clone)]
 enum TypeKind {
-    Int,
+    Int {
+        size: u16,
+    },
     Func {
         params: Box<Vec<Type>>,
         return_ty: Option<Box<Type>>,
     },
-    Ptr(Box<Type>),
+    Ptr {
+        size: u16,
+        base: Box<Type>,
+    },
+    Array {
+        size: u16,
+        len: u16,
+        base: Box<Type>,
+    },
 }
 
 #[derive(Debug, Clone)]
 struct Type {
     kind: TypeKind,
     name: Option<Token>,
-}
-
-impl Type {
-    fn type_int() -> Self {
-        Self {
-            kind: TypeKind::Int,
-            name: None,
-        }
-    }
 }
 
 #[derive(Debug)]
