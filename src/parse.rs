@@ -443,6 +443,8 @@ impl Tokens {
         }
     }
 
+    /// unary = ("+" | "-" | "*" | "&") unary
+    ///       | postfix
     fn unary(&mut self) -> Node {
         if self.consume("+") {
             return self.primary();
@@ -453,7 +455,17 @@ impl Tokens {
         } else if self.consume("*") {
             return Node::new_unary(NodeKind::Deref, self.unary());
         }
-        self.primary()
+        self.postfix()
+    }
+
+    fn postfix(&mut self) -> Node {
+        let mut node = self.primary();
+        while self.consume('[') {
+            let idx = self.expr();
+            self.expect(']');
+            node = Node::new_unary(NodeKind::Deref, Node::new_add(node, idx))
+        }
+        node
     }
 
     fn primary(&mut self) -> Node {
