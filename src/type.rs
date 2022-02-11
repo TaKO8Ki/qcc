@@ -116,7 +116,7 @@ impl Node {
             | NodeKind::Ne
             | NodeKind::Lt
             | NodeKind::Le
-            | NodeKind::LVar(_)
+            | NodeKind::Var { .. }
             | NodeKind::Num(_)
             | NodeKind::FuncCall { .. } => self.ty = Some(Type::type_int()),
             NodeKind::Addr => {

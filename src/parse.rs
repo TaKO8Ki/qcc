@@ -1,4 +1,4 @@
-use crate::{Function, LVar, Node, NodeKind, Token, TokenKind, Tokens, Type, TypeKind};
+use crate::{Function, Node, NodeKind, Token, TokenKind, Tokens, Type, TypeKind, Var};
 use std::collections::LinkedList;
 
 impl Token {
@@ -51,9 +51,9 @@ impl Node {
         }
     }
 
-    fn new_lvar(lvar: LVar, ty: Type) -> Self {
+    fn new_node_var(var: Var, ty: Type) -> Self {
         Node {
-            kind: NodeKind::LVar(lvar),
+            kind: NodeKind::Var(var),
             lhs: None,
             rhs: None,
             body: None,
@@ -160,6 +160,7 @@ impl Tokens {
     pub fn new(tokens: Vec<Token>) -> Self {
         Tokens {
             locals: LinkedList::new(),
+            globals: LinkedList::new(),
             tokens,
             index: 0,
             functions: LinkedList::new(),
@@ -175,10 +176,16 @@ impl Tokens {
         self.tokens.get(self.index + 1)
     }
 
-    fn find_lvar(&self) -> Option<&LVar> {
+    fn find_var(&self) -> Option<&Var> {
         for lvar in self.locals.iter() {
             if lvar.name.len() == self.token().str.len() && lvar.name == self.token().str {
                 return Some(lvar);
+            }
+        }
+
+        for gvar in self.globals.iter() {
+            if gvar.name.len() == self.token().str.len() && gvar.name == self.token().str {
+                return Some(gvar);
             }
         }
         None
@@ -200,6 +207,38 @@ impl Tokens {
         node
     }
 
+    fn global_variable(&mut self) {
+        let ty = self.declspec();
+        let mut first = true;
+
+        while !self.consume(';') {
+            if !first {
+                self.expect(',');
+            }
+            first = false;
+
+            let ty = self.declarator(ty.clone());
+            let gvar = self.add_gvar(ty.clone().name.unwrap().get_ident().unwrap(), ty.clone());
+            Node::new_node_var(gvar, ty);
+        }
+    }
+
+    pub fn is_function(&mut self) -> bool {
+        if self.equal(';') {
+            return false;
+        }
+        let mut tokens = Self {
+            tokens: self.tokens.clone(),
+            locals: LinkedList::new(),
+            globals: LinkedList::new(),
+            index: self.index,
+            functions: LinkedList::new(),
+        };
+        let ty = tokens.declspec();
+        let ty = tokens.declarator(ty);
+        matches!(ty.kind, TypeKind::Func { .. })
+    }
+
     pub fn program(&mut self) {
         loop {
             log::debug!("program token={:?}", self.token());
@@ -207,20 +246,38 @@ impl Tokens {
                 break;
             }
 
-            let function = self.function();
-            self.functions.push_back(function);
+            if self.is_function() {
+                let function = self.function();
+                self.functions.push_back(function);
+                continue;
+            }
+
+            self.global_variable();
         }
         log::debug!("functions={:?}", self.functions);
     }
 
-    fn add_lvar(&mut self, name: String, ty: Type) -> LVar {
-        let lvar = LVar {
+    fn add_lvar(&mut self, name: String, ty: Type) -> Var {
+        let lvar = Var {
             name,
             offset: self.locals.front().map_or(0, |lvar| lvar.offset) + ty.size().unwrap() as usize,
             ty,
+            is_local: true,
         };
         self.locals.push_front(lvar.clone());
         lvar
+    }
+
+    fn add_gvar(&mut self, name: String, ty: Type) -> Var {
+        let gvar = Var {
+            name,
+            offset: self.globals.front().map_or(0, |gvar| gvar.offset)
+                + ty.size().unwrap() as usize,
+            ty,
+            is_local: false,
+        };
+        self.globals.push_front(gvar.clone());
+        gvar
     }
 
     fn get_number(&self) -> u16 {
@@ -296,7 +353,7 @@ impl Tokens {
 
             let ty = self.declarator(basety.clone());
             let lvar = self.add_lvar(ty.clone().name.unwrap().get_ident().unwrap(), ty.clone());
-            let lhs = Node::new_lvar(lvar, ty);
+            let lhs = Node::new_node_var(lvar, ty);
 
             if !self.consume('=') {
                 continue;
@@ -486,9 +543,9 @@ impl Tokens {
                 return self.funcall();
             }
 
-            let lvar = self.find_lvar();
-            let node = match lvar {
-                Some(lvar) => Node::new_lvar(lvar.clone(), lvar.ty.clone()),
+            let var = self.find_var();
+            let node = match var {
+                Some(var) => Node::new_node_var(var.clone(), var.ty.clone()),
                 None => panic!(
                     "undefined variable: {:?}, locals={:?}",
                     self.token(),

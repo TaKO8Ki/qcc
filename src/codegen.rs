@@ -1,26 +1,37 @@
-use std::collections::LinkedList;
+use crate::{Function, Node, NodeKind, Tokens, TypeKind, ARG_REG};
 
-use crate::{Function, Node, NodeKind, TypeKind, ARG_REG};
+impl Tokens {
+    pub(crate) fn codegen(&self, asm: &mut Vec<String>) {
+        self.emit_data(asm);
+        let mut count = 0;
+        for func in &self.functions {
+            asm.push(String::from(".intel_syntax noprefix"));
+            asm.push(format!(".globl {}", func.name));
+            asm.push(String::from(".text"));
+            asm.push(format!("{}:", func.name));
 
-pub(crate) fn codegen(asm: &mut Vec<String>, functions: LinkedList<Function>) {
-    let mut count = 0;
-    for func in functions.iter() {
-        asm.push(String::from(".intel_syntax noprefix"));
-        asm.push(format!(".globl {}", func.name));
-        asm.push(format!("{}:", func.name));
+            asm.push(String::from("  push rbp"));
+            asm.push(String::from("  mov rbp, rsp"));
+            asm.push(String::from("  sub rsp, 208"));
 
-        asm.push(String::from("  push rbp"));
-        asm.push(String::from("  mov rbp, rsp"));
-        asm.push(String::from("  sub rsp, 208"));
+            func.gen_param(asm);
 
-        func.gen_param(asm);
+            func.body.gen_stmt(asm, &mut count);
+            asm.push(String::from("  pop rax"));
 
-        func.body.gen_stmt(asm, &mut count);
-        asm.push(String::from("  pop rax"));
+            asm.push(String::from("  mov rsp, rbp"));
+            asm.push(String::from("  pop rbp"));
+            asm.push(String::from("  ret"));
+        }
+    }
 
-        asm.push(String::from("  mov rsp, rbp"));
-        asm.push(String::from("  pop rbp"));
-        asm.push(String::from("  ret"));
+    fn emit_data(&self, asm: &mut Vec<String>) {
+        for global in &self.globals {
+            asm.push(String::from(".data"));
+            asm.push(format!(".globl {}", global.name));
+            asm.push(format!("{}:", global.name));
+            asm.push(format!("  .zero {}", global.ty.size().unwrap()));
+        }
     }
 }
 
@@ -53,9 +64,13 @@ impl Node {
 
     fn gen_lval(&self, asm: &mut Vec<String>, count: &mut usize) {
         match &self.kind {
-            NodeKind::LVar(lvar) => {
-                asm.push(String::from("  mov rax, rbp"));
-                asm.push(format!("  sub rax, {}", lvar.offset));
+            NodeKind::Var(var) => {
+                if var.is_local {
+                    asm.push(String::from("  mov rax, rbp"));
+                    asm.push(format!("  sub rax, {}", var.offset));
+                } else {
+                    asm.push(format!("  lea rax, {}[rip]", var.name));
+                }
                 asm.push(String::from("  push rax"));
             }
             NodeKind::Deref => {
@@ -150,7 +165,7 @@ impl Node {
                 asm.push(format!("  push {}", val));
                 return;
             }
-            NodeKind::LVar(_) => {
+            NodeKind::Var { .. } => {
                 self.gen_lval(asm, count);
                 asm.push(String::from("  pop rax"));
                 self.load(asm);

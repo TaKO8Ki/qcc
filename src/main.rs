@@ -52,7 +52,7 @@ enum NodeKind {
         name: String,
         args: Vec<Node>,
     },
-    LVar(LVar),
+    Var(Var),
     Num(u16),
 }
 
@@ -84,7 +84,8 @@ struct Type {
 
 #[derive(Debug)]
 struct Tokens {
-    locals: LinkedList<LVar>,
+    locals: LinkedList<Var>,
+    globals: LinkedList<Var>,
     tokens: Vec<Token>,
     index: usize,
     functions: LinkedList<Function>,
@@ -94,15 +95,16 @@ struct Tokens {
 struct Function {
     name: String,
     body: Node,
-    params: LinkedList<LVar>,
-    locals: LinkedList<LVar>,
+    params: LinkedList<Var>,
+    locals: LinkedList<Var>,
 }
 
 #[derive(Debug, Clone)]
-struct LVar {
+struct Var {
     name: String,
     offset: usize,
     ty: Type,
+    is_local: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -141,8 +143,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokens.program();
 
     log::debug!("parsed tokens: {:#?}", tokens);
-
-    codegen::codegen(&mut asm, tokens.functions);
+    tokens.codegen(&mut asm);
 
     println!("{}", asm.join("\n"));
     Ok(())
