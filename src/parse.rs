@@ -260,8 +260,7 @@ impl Tokens {
             let sz = self.get_number();
             self.next();
             self.expect(']');
-            log::debug!("type_suffix ty={:?}", ty);
-            return ty.array_of(sz);
+            return self.type_suffix(ty.clone()).array_of(sz);
         }
         ty
     }
@@ -398,7 +397,9 @@ impl Tokens {
                 );
                 self.declaration()
             } else {
-                self.stmt()
+                let mut node = self.stmt();
+                node.add_type();
+                node
             });
         }
         Node::new_block(Some(body))

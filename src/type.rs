@@ -25,9 +25,9 @@ impl Type {
 
     pub fn size(&self) -> Option<u16> {
         match &self.kind {
-            TypeKind::Int { size, .. }
-            | TypeKind::Ptr { size, .. }
-            | TypeKind::Array { size, .. } => Some(size.clone()),
+            TypeKind::Int { size } | TypeKind::Ptr { size, .. } | TypeKind::Array { size, .. } => {
+                Some(size.clone())
+            }
             _ => None,
         }
     }
@@ -136,17 +136,16 @@ impl Node {
                 };
             }
             NodeKind::Deref => {
-                if let Some(base) = self
+                if let Some(Some(base)) = self
                     .lhs
                     .as_ref()
                     .map(|lhs| lhs.ty.clone().map(|ty| ty.base()))
                     .flatten()
-                    .unwrap_or_default()
                 {
-                    self.ty = Some(base)
-                } else {
-                    self.ty = Some(Type::type_int())
+                    self.ty = Some(base);
+                    return;
                 }
+                unreachable!("invalid pointer dereference")
             }
             _ => {}
         }
