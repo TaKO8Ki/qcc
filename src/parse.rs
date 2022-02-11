@@ -469,10 +469,16 @@ impl Tokens {
     }
 
     fn primary(&mut self) -> Node {
-        if self.consume("(") {
+        if self.consume('(') {
             let node = self.expr();
-            self.expect(")");
+            self.expect(')');
             return node;
+        }
+
+        if self.consume("sizeof") {
+            let mut node = self.unary();
+            node.add_type();
+            return Node::new_node_num(node.ty.unwrap().size().unwrap());
         }
 
         if let TokenKind::Ident = self.token().kind {

@@ -121,7 +121,7 @@ impl Token {
 }
 
 fn is_keyword(token: impl Into<String>) -> bool {
-    ["return", "if", "else", "while", "for", "int"].contains(&token.into().as_ref())
+    ["return", "if", "else", "while", "for", "int", "sizeof"].contains(&token.into().as_ref())
 }
 
 fn is_punctuators(ch: char) -> bool {
