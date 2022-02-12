@@ -1,4 +1,7 @@
-use crate::{Function, Node, NodeKind, Tokens, TypeKind, ARG_REG};
+use crate::{Function, Node, NodeKind, Tokens, TypeKind};
+
+const ARG_REG8: &[&str] = &["dil", "sil", "dl", "cl", "r8b", "r9b"];
+const ARG_REG64: &[&str] = &["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 
 impl Tokens {
     pub(crate) fn codegen(&self, asm: &mut Vec<String>) {
@@ -41,12 +44,14 @@ impl Function {
             asm.push(String::from("  mov rax, rbp"));
             asm.push(format!("  sub rax, {}", var.offset));
             asm.push(String::from("  push rax"));
-
-            asm.push(format!("  push {}", ARG_REG[i]));
-
+            asm.push(format!("  push {}", ARG_REG64[i]));
             asm.push(String::from("  pop rdi"));
             asm.push(String::from("  pop rax"));
-            asm.push(String::from("  mov [rax], rdi"));
+            if matches!(var.ty.size(), Some(size) if size == 1) {
+                asm.push(String::from("  mov [rax], dil"));
+            } else {
+                asm.push(String::from("  mov [rax], rdi"));
+            }
             asm.push(String::from("  push rdi"));
         }
     }
@@ -58,8 +63,24 @@ impl Node {
             if let TypeKind::Array { .. } = ty.kind {
                 return;
             }
+            if matches!(ty.size(), Some(size) if size == 1) {
+                asm.push(String::from("  movzx rax, BYTE PTR [rax]"));
+                return;
+            }
         }
+
         asm.push(String::from("  mov rax, [rax]"))
+    }
+
+    fn store(&self, asm: &mut Vec<String>) {
+        if let Some(ty) = &self.ty {
+            if matches!(ty.size(), Some(size) if size == 1) {
+                asm.push(String::from("  mov [rax], dil"));
+                return;
+            }
+        }
+
+        asm.push(String::from("  mov [rax], rdi"));
     }
 
     fn gen_lval(&self, asm: &mut Vec<String>, count: &mut usize) {
@@ -182,7 +203,7 @@ impl Node {
 
                 asm.push(String::from("  pop rdi"));
                 asm.push(String::from("  pop rax"));
-                asm.push(String::from("  mov [rax], rdi"));
+                self.store(asm);
                 asm.push(String::from("  push rdi"));
                 return;
             }
@@ -209,7 +230,7 @@ impl Node {
                 }
 
                 for i in (0..nargs).rev() {
-                    asm.push(format!("  pop {}", ARG_REG[i]));
+                    asm.push(format!("  pop {}", ARG_REG64[i]));
                 }
 
                 asm.push(String::from("  mov rax, 0"));

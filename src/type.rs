@@ -8,8 +8,15 @@ impl Type {
         }
     }
 
+    pub fn type_char() -> Self {
+        Self {
+            kind: TypeKind::Char { size: 1 },
+            name: None,
+        }
+    }
+
     pub fn is_integer(&self) -> bool {
-        matches!(self.kind, TypeKind::Int { .. })
+        matches!(self.kind, TypeKind::Int { .. } | TypeKind::Char { .. })
     }
 
     pub fn is_pointer(&self) -> bool {
@@ -25,9 +32,10 @@ impl Type {
 
     pub fn size(&self) -> Option<u16> {
         match &self.kind {
-            TypeKind::Int { size } | TypeKind::Ptr { size, .. } | TypeKind::Array { size, .. } => {
-                Some(size.clone())
-            }
+            TypeKind::Int { size }
+            | TypeKind::Ptr { size, .. }
+            | TypeKind::Array { size, .. }
+            | TypeKind::Char { size, .. } => Some(size.clone()),
             _ => None,
         }
     }

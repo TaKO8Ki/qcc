@@ -6,8 +6,6 @@ mod parse;
 mod tokenize;
 mod r#type;
 
-const ARG_REG: &[&str] = &["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
-
 #[derive(PartialEq, Clone, Debug)]
 enum TokenKind {
     Keyword,
@@ -59,6 +57,9 @@ enum NodeKind {
 #[derive(Debug, Clone)]
 enum TypeKind {
     Int {
+        size: u16,
+    },
+    Char {
         size: u16,
     },
     Func {

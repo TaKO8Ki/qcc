@@ -288,6 +288,10 @@ impl Tokens {
     }
 
     fn declspec(&mut self) -> Type {
+        if self.consume("char") {
+            return Type::type_char();
+        }
+
         self.expect("int");
         Type::type_int()
     }
@@ -446,7 +450,7 @@ impl Tokens {
     fn compound_stmt(&mut self) -> Node {
         let mut body = Vec::new();
         while !self.consume("}") {
-            body.push(if self.equal("int") {
+            let mut node = if self.is_type_name() {
                 log::debug!(
                     "declaration, token={:?}, index={}",
                     self.token(),
@@ -454,10 +458,10 @@ impl Tokens {
                 );
                 self.declaration()
             } else {
-                let mut node = self.stmt();
-                node.add_type();
-                node
-            });
+                self.stmt()
+            };
+            node.add_type();
+            body.push(node);
         }
         Node::new_block(Some(body))
     }
@@ -672,7 +676,7 @@ impl Tokens {
         true
     }
 
-    fn equal(&mut self, op: impl Into<String>) -> bool {
+    fn equal(&self, op: impl Into<String>) -> bool {
         let token = self.token();
         let op = op.into();
         if (token.kind != TokenKind::Keyword && token.kind != TokenKind::Punct)
@@ -693,5 +697,9 @@ impl Tokens {
             }
         }
         true
+    }
+
+    fn is_type_name(&self) -> bool {
+        self.equal("int") || self.equal("char")
     }
 }
