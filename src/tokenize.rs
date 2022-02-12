@@ -35,24 +35,8 @@ impl Token {
             }
 
             if p == '"' {
-                let mut str = String::new();
-                while let Some((_, c)) = chars_iter.next() {
-                    log::debug!("string literal={}", c);
-                    if c == '\n' || c == '\0' {
-                        return Err(format!("unclosed string literal: {:?}", c));
-                    }
-                    if c == '"' {
-                        break;
-                    }
-                    str.push(c);
-                }
-                tokens.push(Self::new(
-                    TokenKind::Str {
-                        str: str.clone(),
-                        ty: Box::new(Type::type_char().array_of(str.len() as u16 + 1)),
-                    },
-                    str,
-                ));
+                let token = read_string_literal(&mut chars_iter);
+                tokens.push(token?);
                 continue;
             }
 
@@ -188,5 +172,50 @@ fn convert_keywords(tokens: &mut Vec<Token>) {
                 token.kind = TokenKind::Keyword;
             }
         }
+    }
+}
+
+fn read_string_literal(chars: &mut impl Iterator<Item = (usize, char)>) -> Result<Token, String> {
+    let mut str = String::new();
+    while let Some((_, c)) = chars.next() {
+        log::debug!("string literal={}", c);
+        if c == '\n' || c == '\0' {
+            return Err(format!("unclosed string literal: {:?}", c));
+        }
+        if c == '"' {
+            break;
+        }
+        str.push(c);
+    }
+
+    let mut buf = String::new();
+    let mut chars_iter = str.chars();
+    while let Some(c) = chars_iter.next() {
+        if c == '\\' {
+            buf.push_str(&read_escaped_char(chars_iter.next().unwrap()));
+        } else {
+            buf.push(c);
+        }
+    }
+    Ok(Token::new(
+        TokenKind::Str {
+            str: buf.clone(),
+            ty: Box::new(Type::type_char().array_of(buf.len() as u16 + 1)),
+        },
+        str,
+    ))
+}
+
+fn read_escaped_char(c: char) -> String {
+    match c {
+        'a' => String::from("\u{07}"),
+        'b' => String::from("\u{08}"),
+        't' => String::from("\u{09}"),
+        'n' => String::from("\u{0A}"),
+        'v' => String::from("\u{0B}"),
+        'f' => String::from("\u{0C}"),
+        'r' => String::from("\u{0D}"),
+        'e' => String::from("\u{1B}"),
+        _ => c.to_string(),
     }
 }
