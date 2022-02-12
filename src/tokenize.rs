@@ -207,6 +207,16 @@ fn read_string_literal(chars: &mut impl Iterator<Item = (usize, char)>) -> Resul
     ))
 }
 
+fn from_hex(c: char) -> u8 {
+    if '0' <= c && c <= '9' {
+        return c as u8 - '0' as u8;
+    }
+    if 'a' <= c && c <= 'f' {
+        return c as u8 - 'a' as u8 + 10;
+    }
+    return c as u8 - 'A' as u8 + 10;
+}
+
 fn read_escaped_char(chars: &mut impl Iterator<Item = char>) -> String {
     let mut c = chars.next().unwrap();
     if '0' <= c && c <= '7' {
@@ -223,6 +233,24 @@ fn read_escaped_char(chars: &mut impl Iterator<Item = char>) -> String {
                     None => break,
                 }
             }
+        }
+        return (ch as char).to_string();
+    }
+
+    if c == 'x' {
+        if let Some(ch) = chars.next() {
+            c = ch
+        }
+        if !c.is_digit(16) {
+            panic!("invalid hex escape sequence");
+        }
+
+        let mut ch = from_hex(c);
+        while let Some(char) = chars.next() {
+            if !char.is_digit(16) {
+                break;
+            }
+            ch = (ch << 4) + from_hex(char);
         }
         return (ch as char).to_string();
     }
