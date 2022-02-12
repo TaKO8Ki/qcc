@@ -190,9 +190,10 @@ fn read_string_literal(chars: &mut impl Iterator<Item = (usize, char)>) -> Resul
 
     let mut buf = String::new();
     let mut chars_iter = str.chars();
+    log::debug!("chars_iter={:?}", chars_iter);
     while let Some(c) = chars_iter.next() {
         if c == '\\' {
-            buf.push_str(&read_escaped_char(chars_iter.next().unwrap()));
+            buf.push_str(&read_escaped_char(&mut chars_iter));
         } else {
             buf.push(c);
         }
@@ -206,7 +207,26 @@ fn read_string_literal(chars: &mut impl Iterator<Item = (usize, char)>) -> Resul
     ))
 }
 
-fn read_escaped_char(c: char) -> String {
+fn read_escaped_char(chars: &mut impl Iterator<Item = char>) -> String {
+    let mut c = chars.next().unwrap();
+    if '0' <= c && c <= '7' {
+        let mut ch = c as u8 - '0' as u8;
+        match chars.next() {
+            Some(ch) => c = ch,
+            None => return (ch as char).to_string(),
+        }
+        for _ in 0..2 {
+            if '0' <= c && c <= '7' {
+                ch = (ch << 3) + (c as u8 - '0' as u8);
+                match chars.next() {
+                    Some(ch) => c = ch,
+                    None => break,
+                }
+            }
+        }
+        return (ch as char).to_string();
+    }
+
     match c {
         'a' => String::from("\u{07}"),
         'b' => String::from("\u{08}"),
