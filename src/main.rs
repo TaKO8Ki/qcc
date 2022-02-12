@@ -6,12 +6,13 @@ mod parse;
 mod tokenize;
 mod r#type;
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(Clone, Debug)]
 enum TokenKind {
     Keyword,
     Punct,
     Ident,
     Num(u16),
+    Str { str: String, ty: Box<Type> },
     Eof,
 }
 
@@ -106,6 +107,7 @@ struct Var {
     offset: usize,
     ty: Type,
     is_local: bool,
+    init_data: Option<String>,
 }
 
 #[derive(Debug, Clone)]

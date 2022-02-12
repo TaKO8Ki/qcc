@@ -218,7 +218,11 @@ impl Tokens {
             first = false;
 
             let ty = self.declarator(ty.clone());
-            let gvar = self.add_gvar(ty.clone().name.unwrap().get_ident().unwrap(), ty.clone());
+            let gvar = self.add_gvar(
+                ty.clone().name.unwrap().get_ident().unwrap(),
+                ty.clone(),
+                None,
+            );
             Node::new_node_var(gvar, ty);
         }
     }
@@ -242,7 +246,7 @@ impl Tokens {
     pub fn program(&mut self) {
         loop {
             log::debug!("program token={:?}", self.token());
-            if self.token().kind == TokenKind::Eof {
+            if let TokenKind::Eof = self.token().kind {
                 break;
             }
 
@@ -263,21 +267,27 @@ impl Tokens {
             offset: self.locals.front().map_or(0, |lvar| lvar.offset) + ty.size().unwrap() as usize,
             ty,
             is_local: true,
+            init_data: None,
         };
         self.locals.push_front(lvar.clone());
         lvar
     }
 
-    fn add_gvar(&mut self, name: String, ty: Type) -> Var {
+    fn add_gvar(&mut self, name: String, ty: Type, init_data: Option<String>) -> Var {
         let gvar = Var {
             name,
             offset: self.globals.front().map_or(0, |gvar| gvar.offset)
                 + ty.size().unwrap() as usize,
             ty,
             is_local: false,
+            init_data,
         };
         self.globals.push_front(gvar.clone());
         gvar
+    }
+
+    fn new_string_literal(&mut self, name: String, ty: Type, init_data: String) -> Var {
+        self.add_gvar(name, ty, Some(init_data))
     }
 
     fn get_number(&self) -> u16 {
@@ -561,6 +571,13 @@ impl Tokens {
             return node;
         }
 
+        if let TokenKind::Str { ty, str } = self.token().clone().kind {
+            let var = self.new_string_literal(".L..a".to_string(), *ty, str);
+            log::debug!("string literal: {:?}", var);
+            self.next();
+            return Node::new_node_var(var.clone(), var.ty);
+        }
+
         if let TokenKind::Num(val) = self.token().kind {
             let node = Node::new_node_num(val);
             self.next();
@@ -656,7 +673,7 @@ impl Tokens {
     fn expect(&mut self, op: impl Into<String>) {
         let token = self.token();
         let op = op.into();
-        if (token.kind != TokenKind::Keyword && token.kind != TokenKind::Punct)
+        if matches!(token.kind, TokenKind::Keyword) && matches!(token.kind, TokenKind::Punct)
             || token.str.to_string() != op
         {
             panic!("expected: `{}`, actual: `{}`", op, token.str);
@@ -667,7 +684,7 @@ impl Tokens {
     fn consume(&mut self, op: impl Into<String>) -> bool {
         let token = self.token();
         let op = op.into();
-        if (token.kind != TokenKind::Keyword && token.kind != TokenKind::Punct)
+        if matches!(token.kind, TokenKind::Keyword) && matches!(token.kind, TokenKind::Punct)
             || token.str.to_string() != op
         {
             return false;
@@ -679,7 +696,7 @@ impl Tokens {
     fn equal(&self, op: impl Into<String>) -> bool {
         let token = self.token();
         let op = op.into();
-        if (token.kind != TokenKind::Keyword && token.kind != TokenKind::Punct)
+        if !matches!(token.kind, TokenKind::Keyword) && !matches!(token.kind, TokenKind::Punct)
             || token.str.to_string() != op
         {
             return false;
@@ -690,7 +707,7 @@ impl Tokens {
     fn next_equal(&mut self, op: impl Into<String>) -> bool {
         if let Some(token) = self.next_token() {
             let op = op.into();
-            if (token.kind != TokenKind::Keyword && token.kind != TokenKind::Punct)
+            if !matches!(token.kind, TokenKind::Keyword) && !matches!(token.kind, TokenKind::Punct)
                 || token.str.to_string() != op
             {
                 return false;

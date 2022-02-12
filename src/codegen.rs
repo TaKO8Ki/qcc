@@ -33,7 +33,14 @@ impl Tokens {
             asm.push(String::from(".data"));
             asm.push(format!(".globl {}", global.name));
             asm.push(format!("{}:", global.name));
-            asm.push(format!("  .zero {}", global.ty.size().unwrap()));
+
+            if let Some(data) = global.init_data.as_ref() {
+                for ch in data.chars() {
+                    asm.push(format!("  .byte {}", ch as u8));
+                }
+            } else {
+                asm.push(format!("  .zero {}", global.ty.size().unwrap()));
+            }
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::{Token, TokenKind};
+use crate::{Token, TokenKind, Type};
 use unicode_width::UnicodeWidthStr;
 
 fn error_at(loc: String, input: String, error: String) -> String {
@@ -31,6 +31,28 @@ impl Token {
         while let Some((i, p)) = chars_iter.next() {
             log::debug!("tokens={:?}", tokens);
             if p.is_whitespace() {
+                continue;
+            }
+
+            if p == '"' {
+                let mut str = String::new();
+                while let Some((_, c)) = chars_iter.next() {
+                    log::debug!("string literal={}", c);
+                    if c == '\n' || c == '\0' {
+                        return Err(format!("unclosed string literal: {:?}", c));
+                    }
+                    if c == '"' {
+                        break;
+                    }
+                    str.push(c);
+                }
+                tokens.push(Self::new(
+                    TokenKind::Str {
+                        str: str.clone(),
+                        ty: Box::new(Type::type_char().array_of(str.len() as u16 + 1)),
+                    },
+                    str,
+                ));
                 continue;
             }
 
