@@ -679,7 +679,7 @@ impl Tokens {
         if matches!(token.kind, TokenKind::Keyword) && matches!(token.kind, TokenKind::Punct)
             || token.str.to_string() != op
         {
-            panic!("expected: `{}`, actual: `{}`", op, token.str);
+            self.error_token(format!("expected: `{}`, actual: `{}`", op, token.str))
         }
         self.next();
     }
@@ -721,5 +721,17 @@ impl Tokens {
 
     fn is_type_name(&self) -> bool {
         self.equal("int") || self.equal("char")
+    }
+
+    fn error_token(&self, msg: String) {
+        panic!(
+            "{}\n{}^ {}",
+            self.tokens
+                .iter()
+                .map(|token| token.str.clone())
+                .collect::<String>(),
+            (1..self.index).map(|_| " ").collect::<String>(),
+            msg
+        )
     }
 }

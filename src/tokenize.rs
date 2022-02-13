@@ -1,13 +1,20 @@
 use crate::{Token, TokenKind, Type};
-use unicode_width::UnicodeWidthStr;
+use std::str::Chars;
 
-fn error_at(loc: String, input: String, error: String) -> String {
+fn error_at(input: Chars, index: usize, error: String) -> String {
+    let loc: Vec<char> = input
+        .clone()
+        .enumerate()
+        .filter(|(idx, _)| idx <= &index)
+        .map(|(_, v)| v)
+        .collect();
+
     String::from(format!(
-        "{}\n{}",
-        input,
+        "{}{}",
+        input.clone().collect::<String>(),
         format!(
             "{}^ {}",
-            (1..loc.width()).map(|_| " ").collect::<String>(),
+            (1..loc.len()).map(|_| " ").collect::<String>(),
             error
         )
     ))
@@ -108,16 +115,7 @@ impl Token {
                 ));
                 continue;
             };
-            return Err(error_at(
-                chars
-                    .clone()
-                    .enumerate()
-                    .filter(|(idx, _)| idx <= &i)
-                    .map(|(_, v)| v)
-                    .collect(),
-                chars.clone().collect::<String>(),
-                "cannot tokenize".to_string(),
-            ));
+            return Err(error_at(chars, i, "invalid token".to_string()));
         }
 
         tokens.push(Self::new(TokenKind::Eof, ""));

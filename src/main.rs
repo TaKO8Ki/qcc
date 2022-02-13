@@ -141,8 +141,7 @@ impl Node {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
-    let arg = env::args().nth(1).unwrap();
-
+    let arg = parse_args();
     let chars = arg.chars();
     let mut asm = vec![];
 
@@ -163,4 +162,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("{}", asm.join("\n"));
     Ok(())
+}
+
+fn parse_args() -> String {
+    use std::fs::File;
+    use std::io::BufReader;
+    use std::io::Read;
+
+    if let Some(file_path) = env::args().nth(1) {
+        let file = File::open(file_path).expect("failed to open a file");
+        let mut buf_reader = BufReader::new(file);
+        let mut contents = String::new();
+        buf_reader
+            .read_to_string(&mut contents)
+            .expect("failed to read from a file");
+        return contents;
+    }
+    let mut input = String::new();
+    std::io::stdin()
+        .read_line(&mut input)
+        .expect("failed to read from pipe");
+    input
 }
