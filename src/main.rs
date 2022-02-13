@@ -16,7 +16,7 @@ enum TokenKind {
     Eof,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum NodeKind {
     Add,
     Sub,
@@ -45,8 +45,13 @@ enum NodeKind {
     },
     Deref,
     Addr,
-    Block,
+    Block {
+        body: Box<Vec<Node>>,
+    },
     ExprStmt,
+    StmtExpr {
+        body: Box<Vec<Node>>,
+    },
     FuncCall {
         name: String,
         args: Vec<Node>,
@@ -116,13 +121,21 @@ struct Token {
     str: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Node {
     kind: NodeKind,
-    body: Option<Box<Vec<Node>>>,
     lhs: Option<Box<Node>>,
     rhs: Option<Box<Node>>,
     ty: Option<Type>,
+}
+
+impl Node {
+    fn body(&self) -> Option<Vec<Node>> {
+        match &self.kind {
+            NodeKind::Block { body } | NodeKind::StmtExpr { body } => Some(*body.clone()),
+            _ => None,
+        }
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -122,11 +122,15 @@ impl Node {
                 asm.push(String::from("  ret"));
                 return;
             }
-            NodeKind::Block => {
-                if let Some(body) = self.body.as_ref() {
-                    for node in body.iter() {
-                        node.gen_stmt(asm, count);
-                    }
+            NodeKind::Block { body } => {
+                for node in body.iter() {
+                    node.gen_stmt(asm, count);
+                }
+                return;
+            }
+            NodeKind::ExprStmt => {
+                if let Some(node) = self.lhs.as_ref() {
+                    node.gen_expr(asm, count);
                 }
                 return;
             }
@@ -227,6 +231,12 @@ impl Node {
                 asm.push(String::from("  pop rax"));
                 self.load(asm);
                 asm.push(String::from("  push rax"));
+                return;
+            }
+            NodeKind::StmtExpr { body } => {
+                for node in body.iter() {
+                    node.gen_stmt(asm, count);
+                }
                 return;
             }
             NodeKind::FuncCall { name, args } => {

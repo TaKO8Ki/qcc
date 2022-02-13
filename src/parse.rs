@@ -16,7 +16,6 @@ impl Node {
             kind,
             lhs: None,
             rhs: None,
-            body: None,
             ty: None,
         }
     }
@@ -26,7 +25,6 @@ impl Node {
             kind,
             lhs: Some(Box::new(lhs)),
             rhs: Some(Box::new(rhs)),
-            body: None,
             ty: None,
         }
     }
@@ -36,7 +34,6 @@ impl Node {
             kind,
             lhs: Some(Box::new(lhs)),
             rhs: None,
-            body: None,
             ty: None,
         }
     }
@@ -46,7 +43,6 @@ impl Node {
             kind: NodeKind::Num(val),
             lhs: None,
             rhs: None,
-            body: None,
             ty: None,
         }
     }
@@ -56,17 +52,17 @@ impl Node {
             kind: NodeKind::Var(var),
             lhs: None,
             rhs: None,
-            body: None,
             ty: Some(ty),
         }
     }
 
-    fn new_block(body: Option<Vec<Node>>) -> Self {
+    fn new_block(body: Vec<Node>) -> Self {
         Node {
-            kind: NodeKind::Block,
+            kind: NodeKind::Block {
+                body: Box::new(body),
+            },
             lhs: None,
             rhs: None,
-            body: body.map(|body| Box::new(body)),
             ty: None,
         }
     }
@@ -379,7 +375,7 @@ impl Tokens {
         }
 
         log::debug!("body={:?}", body);
-        let node = Node::new_block(Some(body));
+        let node = Node::new_block(body);
         log::debug!("declaration last token={:?}", self.token());
         node
     }
@@ -473,15 +469,15 @@ impl Tokens {
             node.add_type();
             body.push(node);
         }
-        Node::new_block(Some(body))
+        Node::new_block(body)
     }
 
     fn expr_stmt(&mut self) -> Node {
         if self.consume(';') {
-            return Node::new_block(None);
+            return Node::new_block(Vec::new());
         }
 
-        let node = self.expr();
+        let node = Node::new_unary(NodeKind::ExprStmt, self.expr());
         self.expect(';');
         node
     }
@@ -541,6 +537,13 @@ impl Tokens {
 
     fn primary(&mut self) -> Node {
         if self.consume('(') {
+            if self.consume('{') {
+                let node = Node::new(NodeKind::StmtExpr {
+                    body: Box::new(self.compound_stmt().body().unwrap()),
+                });
+                self.expect(')');
+                return node;
+            }
             let node = self.expr();
             self.expect(')');
             return node;

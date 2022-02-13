@@ -76,6 +76,42 @@ impl Type {
 }
 
 impl Node {
+    fn add_type_to_body(&mut self) {
+        match &self.kind {
+            NodeKind::Block { body } => {
+                let mut body = body.clone();
+                for node in body.iter_mut() {
+                    node.add_type();
+                }
+                self.kind = NodeKind::Block { body };
+            }
+            NodeKind::StmtExpr { body } => {
+                let mut body = body.clone();
+                for node in body.iter_mut() {
+                    node.add_type();
+                }
+                self.kind = NodeKind::StmtExpr { body };
+            }
+            _ => (),
+        }
+    }
+
+    fn add_type_to_args(&mut self) {
+        match &self.kind {
+            NodeKind::FuncCall { name, args } => {
+                let mut args = args.clone();
+                for node in args.iter_mut() {
+                    node.add_type();
+                }
+                self.kind = NodeKind::FuncCall {
+                    name: name.clone(),
+                    args,
+                };
+            }
+            _ => (),
+        }
+    }
+
     pub fn add_type(&mut self) {
         if self.ty.is_some() {
             return;
@@ -88,17 +124,8 @@ impl Node {
             rhs.add_type();
         }
 
-        if let Some(body) = self.body.as_mut() {
-            for node in body.iter_mut() {
-                node.add_type();
-            }
-        }
-
-        if let Some(body) = self.body.as_mut() {
-            for node in body.iter_mut() {
-                node.add_type();
-            }
-        }
+        self.add_type_to_body();
+        self.add_type_to_args();
 
         if let NodeKind::FuncCall { args, .. } = &mut self.kind {
             for arg in args.iter_mut() {
@@ -106,7 +133,7 @@ impl Node {
             }
         }
 
-        match self.kind {
+        match &self.kind {
             NodeKind::Add | NodeKind::Sub | NodeKind::Mul | NodeKind::Div => {
                 self.ty = self.lhs.as_ref().map(|lhs| lhs.ty.clone()).flatten()
             }
@@ -118,6 +145,7 @@ impl Node {
                         }
                     }
                 }
+                log::debug!("add type to assign");
                 self.ty = self.lhs.as_ref().map(|lhs| lhs.ty.clone()).flatten()
             }
             NodeKind::Eq
@@ -154,6 +182,16 @@ impl Node {
                     return;
                 }
                 unreachable!("invalid pointer dereference")
+            }
+            NodeKind::StmtExpr { body } => {
+                if let Some(stmt) = body.last() {
+                    if let NodeKind::ExprStmt = stmt.kind {
+                        self.ty = Some(stmt.lhs.as_ref().unwrap().ty.clone().unwrap());
+                        return;
+                    }
+                }
+
+                unreachable!("statement expression returning void is not supported",)
             }
             _ => {}
         }
