@@ -14,7 +14,7 @@ assert() {
   expected="$1"
   input="$2"
 
-  echo "$input" | ./target/debug/qcc > tmp.s
+  echo "$input" | ./target/debug/qcc -o tmp.s
   cc -o tmp tmp.s tmp2.o
   ./tmp
   actual="$?"

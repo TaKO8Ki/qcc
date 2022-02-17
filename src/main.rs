@@ -1,5 +1,6 @@
 use std::collections::LinkedList;
 use std::env;
+use std::fs::File;
 
 mod codegen;
 mod parse;
@@ -129,6 +130,14 @@ struct Node {
     ty: Option<Type>,
 }
 
+#[derive(Debug)]
+struct Cli {
+    output: String,
+    input: Option<String>,
+    help: bool,
+    contents: Option<String>,
+}
+
 impl Node {
     fn body(&self) -> Option<Vec<Node>> {
         match &self.kind {
@@ -139,10 +148,17 @@ impl Node {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    use std::io::Write;
+
     env_logger::init();
 
-    let arg = parse_args();
-    let chars = arg.chars();
+    let args = parse_args()?;
+    if args.help {
+        usage(0)
+    }
+
+    let contents = args.contents.unwrap();
+    let chars = contents.chars();
     let mut asm = vec![];
 
     let tokens = match Token::tokenize(chars.clone().collect::<String>()) {
@@ -160,27 +176,63 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     log::debug!("parsed tokens: {:#?}", tokens);
     tokens.codegen(&mut asm);
 
-    println!("{}", asm.join("\n"));
+    let mut file = File::create(args.output)?;
+    file.write_all(format!("{}\n", asm.join("\n")).as_bytes())?;
     Ok(())
 }
 
-fn parse_args() -> String {
-    use std::fs::File;
-    use std::io::BufReader;
-    use std::io::Read;
+fn usage(status: i32) {
+    println!("qcc [ -o <path> ] <file>");
+    std::process::exit(status);
+}
 
-    if let Some(file_path) = env::args().nth(1) {
-        let file = File::open(file_path).expect("failed to open a file");
+fn parse_args() -> Result<Cli, String> {
+    use std::io::{BufReader, Read};
+
+    let args: Vec<String> = env::args().collect();
+    let mut args_iter = args.iter().skip(1);
+    let mut cli_args = Cli {
+        output: String::from("tmp.s"),
+        input: None,
+        help: false,
+        contents: None,
+    };
+    log::debug!("args: {:?}", args);
+
+    while let Some(arg) = args_iter.next() {
+        if arg == "--help" {
+            cli_args.help = true;
+            return Ok(cli_args);
+        }
+
+        if arg == "-o" {
+            cli_args.output = args_iter.next().unwrap().clone();
+            continue;
+        }
+
+        cli_args.input = Some(arg.clone());
+        break;
+    }
+
+    log::debug!("cli_args: {:?}", cli_args);
+
+    if let Some(file_path) = &cli_args.input {
+        let file = File::open(file_path).map_err(|_| "failed to open a file")?;
         let mut buf_reader = BufReader::new(file);
         let mut contents = String::new();
         buf_reader
             .read_to_string(&mut contents)
-            .expect("failed to read from a file");
-        return contents;
+            .map_err(|_| "failed to read from a file")?;
+        cli_args.contents = Some(contents);
+    } else {
+        let mut input = String::new();
+        let stdin = std::io::stdin();
+        stdin
+            .lock()
+            .read_to_string(&mut input)
+            .map_err(|_| "failed to read from pipe")?;
+        cli_args.contents = Some(input);
     }
-    let mut input = String::new();
-    std::io::stdin()
-        .read_line(&mut input)
-        .expect("failed to read from pipe");
-    input
+
+    Ok(cli_args)
 }
