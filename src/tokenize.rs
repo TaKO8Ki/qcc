@@ -37,6 +37,34 @@ impl Token {
 
         while let Some((i, p)) = chars_iter.next() {
             log::debug!("tokens={:?}", tokens);
+
+            if is_line_comments(chars_vec.clone(), p, i) {
+                chars_iter.next();
+                while let Some((_, p)) = chars_iter.next() {
+                    if p == '\n' {
+                        break;
+                    }
+                }
+                continue;
+            }
+
+            if is_block_comments(chars_vec.clone(), p, i) {
+                chars_iter.next();
+                match chars_vec[i + 1..].iter().collect::<String>().find("*/") {
+                    Some(idx) => {
+                        for _ in 0..idx {
+                            chars_iter.next();
+                        }
+                    }
+                    None => {
+                        return Err(error_at(chars, i, "unterminated block comment".to_string()));
+                    }
+                }
+                chars_iter.next();
+                chars_iter.next();
+                continue;
+            }
+
             if p.is_whitespace() {
                 continue;
             }
@@ -161,6 +189,20 @@ fn is_ident(ch: char) -> bool {
 
 fn is_number(ch: char) -> bool {
     ('0'..='9').contains(&ch)
+}
+
+fn is_line_comments(chars: Vec<char>, ch: char, i: usize) -> bool {
+    if let Some(next_c) = chars.get(i + 1) {
+        return format!("{}{}", ch, next_c) == "//";
+    }
+    false
+}
+
+fn is_block_comments(chars: Vec<char>, ch: char, i: usize) -> bool {
+    if let Some(next_c) = chars.get(i + 1) {
+        return format!("{}{}", ch, next_c) == "/*";
+    }
+    false
 }
 
 fn convert_keywords(tokens: &mut Vec<Token>) {
