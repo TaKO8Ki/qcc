@@ -1,4 +1,4 @@
-use crate::{Function, Node, NodeKind, Token, TokenKind, Tokens, Type, TypeKind, Var};
+use crate::{Function, Node, NodeKind, Token, TokenKind, Tokens, Type, TypeKind, Var, Scope, VarScope};
 use std::collections::LinkedList;
 
 impl Token {
@@ -154,9 +154,12 @@ impl Node {
 
 impl Tokens {
     pub fn new(tokens: Vec<Token>) -> Self {
+        let mut scope = LinkedList::new();
+        scope.push_front(Scope::default());
         Tokens {
             locals: LinkedList::new(),
             globals: LinkedList::new(),
+            scope,
             tokens,
             index: 0,
             functions: LinkedList::new(),
@@ -173,18 +176,22 @@ impl Tokens {
     }
 
     fn find_var(&self) -> Option<&Var> {
-        for lvar in self.locals.iter() {
-            if lvar.name.len() == self.token().str.len() && lvar.name == self.token().str {
-                return Some(lvar);
-            }
-        }
-
-        for gvar in self.globals.iter() {
-            if gvar.name.len() == self.token().str.len() && gvar.name == self.token().str {
-                return Some(gvar);
+        for scope in self.scope.iter().rev() {
+            for var in scope.vars.iter() {
+                if var.name.len() == self.token().str.len() && var.name == self.token().str {
+                    return Some(&var.var);
+                }
             }
         }
         None
+    }
+
+    fn enter_scope(&mut self) {
+        self.scope.push_front(Scope::default());
+    }
+
+    fn leave_scope(&mut self) {
+        self.scope.pop_front();
     }
 
     fn token(&self) -> &Token {
@@ -231,6 +238,7 @@ impl Tokens {
             tokens: self.tokens.clone(),
             locals: LinkedList::new(),
             globals: LinkedList::new(),
+            scope: LinkedList::new(),
             index: self.index,
             functions: LinkedList::new(),
         };
@@ -257,21 +265,34 @@ impl Tokens {
         log::debug!("functions={:?}", self.functions);
     }
 
+    fn push_scope(&mut self, name: String, var: Var) -> Option<&VarScope> {
+        let sc = VarScope {
+            name,
+            var
+        };
+        if let Some(scope) = self.scope.front_mut() {
+            scope.vars.push_front(sc);
+            return scope.vars.front();
+        }
+        None
+    }
+
     fn add_lvar(&mut self, name: String, ty: Type) -> Var {
         let lvar = Var {
-            name,
+            name: name.clone(),
             offset: self.locals.front().map_or(0, |lvar| lvar.offset) + ty.size().unwrap() as usize,
             ty,
             is_local: true,
             init_data: None,
         };
         self.locals.push_front(lvar.clone());
+        self.push_scope(name, lvar.clone());
         lvar
     }
 
     fn add_gvar(&mut self, name: String, ty: Type, init_data: Option<String>) -> Var {
         let gvar = Var {
-            name,
+            name: name.clone(),
             offset: self.globals.front().map_or(0, |gvar| gvar.offset)
                 + ty.size().unwrap() as usize,
             ty,
@@ -279,6 +300,7 @@ impl Tokens {
             init_data,
         };
         self.globals.push_front(gvar.clone());
+        self.push_scope(name, gvar.clone());
         gvar
     }
 
@@ -455,6 +477,7 @@ impl Tokens {
 
     fn compound_stmt(&mut self) -> Node {
         let mut body = Vec::new();
+        self.enter_scope();
         while !self.consume("}") {
             let mut node = if self.is_type_name() {
                 log::debug!(
@@ -469,6 +492,7 @@ impl Tokens {
             node.add_type();
             body.push(node);
         }
+        self.leave_scope();
         Node::new_block(body)
     }
 
@@ -564,9 +588,11 @@ impl Tokens {
             let node = match var {
                 Some(var) => Node::new_node_var(var.clone(), var.ty.clone()),
                 None => panic!(
-                    "undefined variable: {:?}, locals={:?}",
+                    "undefined variable: {:?}, locals={:?}, global={:?}, scope={:?}",
                     self.token(),
-                    self.locals
+                    self.locals,
+                    self.globals,
+                    self.scope
                 ),
             };
 
@@ -594,6 +620,7 @@ impl Tokens {
         let ty = self.declspec();
         let ty = self.declarator(ty);
         self.locals = LinkedList::new();
+        self.enter_scope();
 
         if let TypeKind::Func { params, .. } = ty.clone().kind {
             let mut func_params = LinkedList::new();
@@ -612,12 +639,14 @@ impl Tokens {
             log::debug!("function name={:?}", name);
 
             self.expect('{');
-            return Function {
+            let function = Function {
                 name,
                 body: self.compound_stmt(),
                 params: func_params,
                 locals: self.locals.clone(),
             };
+            self.leave_scope();
+            return function;
         }
         unreachable!("ty is not function")
     }

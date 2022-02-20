@@ -84,6 +84,25 @@ enum TypeKind {
     },
 }
 
+#[derive(Debug)]
+struct VarScope {
+    name: String,
+    var: Var,
+}
+
+#[derive(Debug)]
+struct Scope {
+    vars: LinkedList<VarScope>,
+}
+
+impl Default for Scope {
+    fn default() -> Self {
+        Scope {
+            vars: LinkedList::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Type {
     kind: TypeKind,
@@ -95,6 +114,7 @@ struct Tokens {
     locals: LinkedList<Var>,
     globals: LinkedList<Var>,
     tokens: Vec<Token>,
+    scope: LinkedList<Scope>,
     index: usize,
     functions: LinkedList<Function>,
 }
