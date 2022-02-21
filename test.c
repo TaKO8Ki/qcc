@@ -37,10 +37,10 @@ int main()
     assert(10, - -10, "- -10");
     assert(10, - -+10, "- -+10");
 
-    assert(0, 0 == 1, "0==1");
-    assert(1, 42 == 42, "42==42");
-    assert(1, 0 != 1, "0!=1");
-    assert(0, 42 != 42, "42!=42");
+    assert(0, 0 == 1, "0 == 1");
+    assert(1, 42 == 42, "42 == 42");
+    assert(1, 0 != 1, "0 != 1");
+    assert(0, 42 != 42, "42 != 42");
 
     assert(1, 0 < 1, "0 < 1");
     assert(0, 1 < 1, "1 < 1");
@@ -63,11 +63,19 @@ int main()
     assert(2, ({ int a=8; int z=4; a/z; }), "int a=8; int z=4; a/z;");
     assert(6, ({ int a; int b; a=b=3; a+b; }), "int a; int b; a=b=3; a+b;");
 
+    assert(3, ({ int foo=3; foo; }), "int foo=3; foo");
+    assert(8, ({ int foo123=3; int bar=5; foo123+bar; }), "int foo123=3; int bar=5; return foo123+bar");
+
+    assert(3, ({ int x=0; if (0) x=2; else x=3; x; }), "int x=0; if (0) x=2; else x=3; x;");
+    assert(3, ({ int x=0; if (1-1) x=2; else x=3; x; }), "int x=0; if (1-1) x=2; else x=3; x;");
+    assert(2, ({ int x=0; if (1) x=2; else x=3; x; }), "int x=0; if (1) x=2; else x=3; x;");
+    assert(2, ({ int x=0; if (2-1) x=2; else x=3; x; }), "int x=0; if (2-1) x=2; else x=3; x;");
+
+    assert(3, ({ 1; {2;} 3; }), "1; {2;} 3;");
+    assert(10, ({ int i=0; i=0; while(i<10) i=i+1; i; }), "int i=0; i=0; while(i<10) i=i+1; i;");
+    assert(55, ({ int i=0; int j=0; while(i<=10) {j=i+j; i=i+1;} j; }), "int i=0; int j=0; while(i<=10) {j=i+j; i=i+1;} j;");
+    assert(55, ({ int i=0; int j=0; for (i=0; i<=10; i=i+1) j=i+j; j; }), "int i=0; int j=0; for (i=0; i<=10; i=i+1) j=i+j; j;");
+
     printf("OK\n");
-    // return 0;
+    return 0;
 }
-
-// 838[addr]
-// 333
-
-// 8358

@@ -191,7 +191,7 @@ impl Function {
             } => {
                 *count += 1;
                 let c = count.clone();
-                self.gen_expr(&init, asm, count);
+                self.gen_stmt(&init, asm, count);
                 asm.push(format!(".L.begin{}:", c));
                 if let Some(cond) = cond {
                     self.gen_expr(&cond, asm, count);
@@ -254,9 +254,12 @@ impl Function {
                 return;
             }
             NodeKind::StmtExpr { body } => {
+                let mut body = body.clone();
+                let last = body.pop().unwrap();
                 for node in body.iter() {
                     self.gen_stmt(&node, asm, count);
                 }
+                self.gen_expr(&last, asm, count);
                 return;
             }
             NodeKind::FuncCall { name, args } => {

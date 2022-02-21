@@ -1,4 +1,6 @@
-use crate::{Function, Node, NodeKind, Token, TokenKind, Tokens, Type, TypeKind, Var, Scope, VarScope};
+use crate::{
+    Function, Node, NodeKind, Scope, Token, TokenKind, Tokens, Type, TypeKind, Var, VarScope,
+};
 use std::collections::LinkedList;
 
 impl Token {
@@ -163,7 +165,7 @@ impl Tokens {
             tokens,
             index: 0,
             functions: LinkedList::new(),
-            string_literal_id: 0
+            string_literal_id: 0,
         }
     }
 
@@ -268,10 +270,7 @@ impl Tokens {
     }
 
     fn push_scope(&mut self, name: String, var: Var) -> Option<&VarScope> {
-        let sc = VarScope {
-            name,
-            var
-        };
+        let sc = VarScope { name, var };
         if let Some(scope) = self.scope.front_mut() {
             scope.vars.push_front(sc);
             return scope.vars.front();
@@ -442,7 +441,8 @@ impl Tokens {
 
         if self.consume("for") {
             self.expect('(');
-            let init = self.stmt();
+            let init = self.expr_stmt();
+            self.expect(';');
             let mut cond = None;
             let mut inc = None;
 
@@ -452,7 +452,7 @@ impl Tokens {
             }
 
             if !self.consume(')') {
-                inc = Some(self.expr());
+                inc = Some(self.expr_stmt());
                 self.expect(')');
             }
 
@@ -475,7 +475,9 @@ impl Tokens {
             return self.compound_stmt();
         }
 
-        self.expr_stmt()
+        let node = self.expr_stmt();
+        self.expect(';');
+        node
     }
 
     fn compound_stmt(&mut self) -> Node {
@@ -505,7 +507,6 @@ impl Tokens {
         }
 
         let node = Node::new_unary(NodeKind::ExprStmt, self.expr());
-        self.expect(';');
         node
     }
 
@@ -565,8 +566,12 @@ impl Tokens {
     fn primary(&mut self) -> Node {
         if self.consume('(') {
             if self.consume('{') {
+                let mut body = self.compound_stmt().body().unwrap();
+                if let Some(last_node) = body.pop() {
+                    body.push(*last_node.lhs.unwrap());
+                }
                 let node = Node::new(NodeKind::StmtExpr {
-                    body: Box::new(self.compound_stmt().body().unwrap()),
+                    body: Box::new(body),
                 });
                 self.expect(')');
                 return node;
@@ -739,7 +744,7 @@ impl Tokens {
         true
     }
 
-    fn next_equal(&mut self, op: impl Into<String>) -> bool {
+    fn next_equal(&self, op: impl Into<String>) -> bool {
         if let Some(token) = self.next_token() {
             let op = op.into();
             if !matches!(token.kind, TokenKind::Keyword) && !matches!(token.kind, TokenKind::Punct)

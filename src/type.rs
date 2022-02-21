@@ -185,13 +185,12 @@ impl Node {
             }
             NodeKind::StmtExpr { body } => {
                 if let Some(stmt) = body.last() {
-                    if let NodeKind::ExprStmt = stmt.kind {
-                        self.ty = Some(stmt.lhs.as_ref().unwrap().ty.clone().unwrap());
-                        return;
-                    }
+                    log::debug!("stmt={:?}", stmt);
+                    self.ty = Some(stmt.ty.clone().unwrap());
+                    return;
                 }
 
-                unreachable!("statement expression returning void is not supported",)
+                // unreachable!("statement expression returning void is not supported",)
             }
             _ => {}
         }
