@@ -19,7 +19,7 @@ int fib(int x)
     return fib(x - 1) + fib(x - 2);
 }
 
-$ ./target/release/qcc fib.c > tmp.s
+$ ./target/release/qcc fib.c
 $ cc -o tmp tmp.s
 $ ./tmp
 $ echo $?

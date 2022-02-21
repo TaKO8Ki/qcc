@@ -1,4 +1,6 @@
-use crate::{Function, Node, NodeKind, Token, TokenKind, Tokens, Type, TypeKind, Var, Scope, VarScope};
+use crate::{
+    Function, Node, NodeKind, Scope, Token, TokenKind, Tokens, Type, TypeKind, Var, VarScope,
+};
 use std::collections::LinkedList;
 
 impl Token {
@@ -163,6 +165,7 @@ impl Tokens {
             tokens,
             index: 0,
             functions: LinkedList::new(),
+            string_literal_id: 0,
         }
     }
 
@@ -241,6 +244,7 @@ impl Tokens {
             scope: LinkedList::new(),
             index: self.index,
             functions: LinkedList::new(),
+            string_literal_id: 0,
         };
         let ty = tokens.declspec();
         let ty = tokens.declarator(ty);
@@ -266,10 +270,7 @@ impl Tokens {
     }
 
     fn push_scope(&mut self, name: String, var: Var) -> Option<&VarScope> {
-        let sc = VarScope {
-            name,
-            var
-        };
+        let sc = VarScope { name, var };
         if let Some(scope) = self.scope.front_mut() {
             scope.vars.push_front(sc);
             return scope.vars.front();
@@ -279,8 +280,9 @@ impl Tokens {
 
     fn add_lvar(&mut self, name: String, ty: Type) -> Var {
         let lvar = Var {
+            id: self.locals.front().map_or(0, |lvar| lvar.id + 1),
             name: name.clone(),
-            offset: self.locals.front().map_or(0, |lvar| lvar.offset) + ty.size().unwrap() as usize,
+            offset: 0,
             ty,
             is_local: true,
             init_data: None,
@@ -292,9 +294,9 @@ impl Tokens {
 
     fn add_gvar(&mut self, name: String, ty: Type, init_data: Option<String>) -> Var {
         let gvar = Var {
+            id: 0,
             name: name.clone(),
-            offset: self.globals.front().map_or(0, |gvar| gvar.offset)
-                + ty.size().unwrap() as usize,
+            offset: 0,
             ty,
             is_local: false,
             init_data,
@@ -304,7 +306,9 @@ impl Tokens {
         gvar
     }
 
-    fn new_string_literal(&mut self, name: String, ty: Type, init_data: String) -> Var {
+    fn new_string_literal(&mut self, ty: Type, init_data: String) -> Var {
+        let name = format!(".L..{}", self.string_literal_id);
+        self.string_literal_id += 1;
         self.add_gvar(name, ty, Some(init_data))
     }
 
@@ -439,7 +443,8 @@ impl Tokens {
 
         if self.consume("for") {
             self.expect('(');
-            let init = self.stmt();
+            let init = self.expr_stmt();
+            self.expect(';');
             let mut cond = None;
             let mut inc = None;
 
@@ -449,7 +454,7 @@ impl Tokens {
             }
 
             if !self.consume(')') {
-                inc = Some(self.expr());
+                inc = Some(self.expr_stmt());
                 self.expect(')');
             }
 
@@ -472,7 +477,9 @@ impl Tokens {
             return self.compound_stmt();
         }
 
-        self.expr_stmt()
+        let node = self.expr_stmt();
+        self.expect(';');
+        node
     }
 
     fn compound_stmt(&mut self) -> Node {
@@ -502,7 +509,6 @@ impl Tokens {
         }
 
         let node = Node::new_unary(NodeKind::ExprStmt, self.expr());
-        self.expect(';');
         node
     }
 
@@ -510,9 +516,9 @@ impl Tokens {
         let mut node = self.mul();
 
         loop {
-            if self.consume("+") {
+            if self.consume('+') {
                 node = Node::new_add(node, self.mul());
-            } else if self.consume("-") {
+            } else if self.consume('-') {
                 node = Node::new_sub(node, self.mul())
             } else {
                 return node;
@@ -537,13 +543,13 @@ impl Tokens {
     /// unary = ("+" | "-" | "*" | "&") unary
     ///       | postfix
     fn unary(&mut self) -> Node {
-        if self.consume("+") {
-            return self.primary();
-        } else if self.consume("-") {
-            return Node::new_binary(NodeKind::Sub, Node::new_node_num(0), self.primary());
-        } else if self.consume("&") {
+        if self.consume('+') {
+            return self.unary();
+        } else if self.consume('-') {
+            return Node::new_binary(NodeKind::Sub, Node::new_node_num(0), self.unary());
+        } else if self.consume('&') {
             return Node::new_unary(NodeKind::Addr, self.unary());
-        } else if self.consume("*") {
+        } else if self.consume('*') {
             return Node::new_unary(NodeKind::Deref, self.unary());
         }
         self.postfix()
@@ -562,8 +568,12 @@ impl Tokens {
     fn primary(&mut self) -> Node {
         if self.consume('(') {
             if self.consume('{') {
+                let mut body = self.compound_stmt().body().unwrap();
+                if let Some(last_node) = body.pop() {
+                    body.push(*last_node.lhs.unwrap());
+                }
                 let node = Node::new(NodeKind::StmtExpr {
-                    body: Box::new(self.compound_stmt().body().unwrap()),
+                    body: Box::new(body),
                 });
                 self.expect(')');
                 return node;
@@ -601,7 +611,7 @@ impl Tokens {
         }
 
         if let TokenKind::Str { ty, str } = self.token().clone().kind {
-            let var = self.new_string_literal(".L..a".to_string(), *ty, str);
+            let var = self.new_string_literal(*ty, str);
             log::debug!("string literal: {:?}", var);
             self.next();
             return Node::new_node_var(var.clone(), var.ty);
@@ -644,6 +654,7 @@ impl Tokens {
                 body: self.compound_stmt(),
                 params: func_params,
                 locals: self.locals.clone(),
+                stack_size: None,
             };
             self.leave_scope();
             return function;
@@ -736,7 +747,7 @@ impl Tokens {
         true
     }
 
-    fn next_equal(&mut self, op: impl Into<String>) -> bool {
+    fn next_equal(&self, op: impl Into<String>) -> bool {
         if let Some(token) = self.next_token() {
             let op = op.into();
             if !matches!(token.kind, TokenKind::Keyword) && !matches!(token.kind, TokenKind::Punct)
