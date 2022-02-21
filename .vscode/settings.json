@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "common": "c",
+        "cstdio": "c"
+    }
+}

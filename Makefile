@@ -1,6 +1,7 @@
-build:
-	@docker run -it --user "$(id -u)":"$(id -g)" -v $(PWD):/usr/src/myapp -w /usr/src/myapp rust cargo b
-
 test:
-	./test.sh
-	./test-driver.sh
+	./target/debug/qcc test.c > tmp.s
+	cc -static -o tmp tmp.s
+	./tmp
+
+build:
+	cargo build

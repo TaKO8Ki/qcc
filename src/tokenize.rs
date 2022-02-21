@@ -219,6 +219,7 @@ fn read_string_literal(chars: &mut impl Iterator<Item = (usize, char)>) -> Resul
     let mut str = String::new();
     while let Some((_, c)) = chars.next() {
         log::debug!("string literal={}", c);
+        log::debug!("str={}", str);
         if c == '\n' || c == '\0' {
             return Err(format!("unclosed string literal: {:?}", c));
         }

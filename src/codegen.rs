@@ -1,10 +1,13 @@
-use crate::{Function, Node, NodeKind, Tokens, TypeKind};
+use crate::{Function, Node, NodeKind, Tokens, TypeKind, Var};
 
 const ARG_REG8: &[&str] = &["dil", "sil", "dl", "cl", "r8b", "r9b"];
 const ARG_REG64: &[&str] = &["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 
 impl Tokens {
-    pub(crate) fn codegen(&self, asm: &mut Vec<String>) {
+    pub(crate) fn codegen(&mut self, asm: &mut Vec<String>) {
+        for func in &mut self.functions {
+            func.assign_lvar_offset();
+        }
         self.emit_data(asm);
         let mut count = 0;
         for func in &self.functions {
@@ -19,7 +22,7 @@ impl Tokens {
 
             func.gen_param(asm);
 
-            func.body.gen_stmt(asm, &mut count);
+            func.gen_stmt(&func.body, asm, &mut count);
             asm.push(String::from("  pop rax"));
 
             asm.push(String::from("  mov rsp, rbp"));
@@ -38,6 +41,7 @@ impl Tokens {
                 for ch in data.chars() {
                     asm.push(format!("  .byte {}", ch as u8));
                 }
+                asm.push(String::from("  .byte 0"));
             } else {
                 asm.push(format!("  .zero {}", global.ty.size().unwrap()));
             }
@@ -48,6 +52,7 @@ impl Tokens {
 impl Function {
     fn gen_param(&self, asm: &mut Vec<String>) {
         for (i, var) in self.params.iter().enumerate() {
+            let var = self.find_lvar(&var.name).unwrap();
             asm.push(String::from("  mov rax, rbp"));
             asm.push(format!("  sub rax, {}", var.offset));
             asm.push(String::from("  push rax"));
@@ -62,11 +67,22 @@ impl Function {
             asm.push(String::from("  push rdi"));
         }
     }
-}
 
-impl Node {
-    fn load(&self, asm: &mut Vec<String>) {
-        if let Some(ty) = &self.ty {
+    fn assign_lvar_offset(&mut self) {
+        let mut offset = 0;
+        log::debug!("locals={:?}", self.locals);
+        for lvar in &mut self.locals.iter_mut() {
+            offset += lvar.ty.size().unwrap() as usize;
+            lvar.offset = offset;
+        }
+    }
+
+    fn find_lvar(&self, name: &str) -> Option<&Var> {
+        self.locals.iter().find(|lvar| lvar.name == name)
+    }
+
+    fn load(&self, node: &Node, asm: &mut Vec<String>) {
+        if let Some(ty) = &node.ty {
             if let TypeKind::Array { .. } = ty.kind {
                 return;
             }
@@ -79,8 +95,8 @@ impl Node {
         asm.push(String::from("  mov rax, [rax]"))
     }
 
-    fn store(&self, asm: &mut Vec<String>) {
-        if let Some(ty) = &self.ty {
+    fn store(&self, node: &Node, asm: &mut Vec<String>) {
+        if let Some(ty) = &node.ty {
             if matches!(ty.size(), Some(size) if size == 1) {
                 asm.push(String::from("  mov [rax], dil"));
                 return;
@@ -90,31 +106,34 @@ impl Node {
         asm.push(String::from("  mov [rax], rdi"));
     }
 
-    fn gen_lval(&self, asm: &mut Vec<String>, count: &mut usize) {
-        match &self.kind {
+    fn gen_lval(&self, node: &Node, asm: &mut Vec<String>, count: &mut usize) {
+        match &node.kind {
             NodeKind::Var(var) => {
                 if var.is_local {
                     asm.push(String::from("  mov rax, rbp"));
-                    asm.push(format!("  sub rax, {}", var.offset));
+                    asm.push(format!(
+                        "  sub rax, {}",
+                        self.find_lvar(&var.name).unwrap().offset
+                    ));
                 } else {
                     asm.push(format!("  lea rax, {}[rip]", var.name));
                 }
                 asm.push(String::from("  push rax"));
             }
             NodeKind::Deref => {
-                if let Some(node) = self.lhs.as_ref() {
-                    node.gen_expr(asm, count);
+                if let Some(node) = node.lhs.as_ref() {
+                    self.gen_expr(&node, asm, count);
                 }
             }
             _ => unreachable!("not lval"),
         }
     }
 
-    pub fn gen_stmt(&self, asm: &mut Vec<String>, count: &mut usize) {
-        match &self.kind {
+    pub fn gen_stmt(&self, node: &Node, asm: &mut Vec<String>, count: &mut usize) {
+        match &node.kind {
             NodeKind::Return => {
-                if let Some(node) = self.lhs.as_ref() {
-                    node.gen_expr(asm, count);
+                if let Some(node) = node.lhs.as_ref() {
+                    self.gen_expr(node, asm, count);
                 }
                 asm.push(String::from("  pop rax"));
                 asm.push(String::from("  mov rsp, rbp"));
@@ -124,28 +143,29 @@ impl Node {
             }
             NodeKind::Block { body } => {
                 for node in body.iter() {
-                    node.gen_stmt(asm, count);
+                    self.gen_stmt(node, asm, count);
                 }
                 return;
             }
             NodeKind::ExprStmt => {
-                if let Some(node) = self.lhs.as_ref() {
-                    node.gen_expr(asm, count);
+                if let Some(node) = node.lhs.as_ref() {
+                    self.gen_expr(&node, asm, count);
+                    asm.push(String::from("  add rsp, 8"));
                 }
                 return;
             }
             NodeKind::If { cond, then, els } => {
                 *count += 1;
                 let c = count.clone();
-                cond.gen_expr(asm, count);
+                self.gen_expr(&cond, asm, count);
                 asm.push(String::from("  pop rax"));
                 asm.push(String::from("  cmp rax, 0"));
                 asm.push(format!("  je .L.else{}", c));
-                then.gen_stmt(asm, count);
+                self.gen_stmt(&then, asm, count);
                 asm.push(format!("  jmp .L.end{}", c));
                 asm.push(format!(".L.else{}:", c));
                 if let Some(els) = els {
-                    els.gen_stmt(asm, count);
+                    self.gen_stmt(&els, asm, count);
                 }
                 asm.push(format!(".L.end{}:", c));
                 return;
@@ -154,11 +174,11 @@ impl Node {
                 *count += 1;
                 let c = count.clone();
                 asm.push(format!(".L.begin{}:", c));
-                cond.gen_expr(asm, count);
+                self.gen_expr(&cond, asm, count);
                 asm.push(String::from("  pop rax"));
                 asm.push(String::from("  cmp rax, 0"));
                 asm.push(format!("  je .L.end{}", c));
-                then.gen_stmt(asm, count);
+                self.gen_stmt(&then, asm, count);
                 asm.push(format!("  jmp .L.begin{}", c));
                 asm.push(format!(".L.end{}:", c));
                 return;
@@ -171,78 +191,78 @@ impl Node {
             } => {
                 *count += 1;
                 let c = count.clone();
-                init.gen_expr(asm, count);
+                self.gen_expr(&init, asm, count);
                 asm.push(format!(".L.begin{}:", c));
                 if let Some(cond) = cond {
-                    cond.gen_expr(asm, count);
+                    self.gen_expr(&cond, asm, count);
                     asm.push(String::from("  pop rax"));
                     asm.push(String::from("  cmp rax, 0"));
                     asm.push(format!("  je .L.end{}", c));
                 }
-                then.gen_stmt(asm, count);
+                self.gen_stmt(&then, asm, count);
                 if let Some(inc) = inc {
-                    inc.gen_expr(asm, count);
+                    self.gen_expr(&inc, asm, count);
                 }
                 asm.push(format!("  jmp .L.begin{}", c));
                 asm.push(format!(".L.end{}:", c));
                 return;
             }
-            _ => self.gen_expr(asm, count),
+            _ => (),
         }
     }
 
-    pub fn gen_expr(&self, asm: &mut Vec<String>, count: &mut usize) {
-        match &self.kind {
+    pub fn gen_expr(&self, node: &Node, asm: &mut Vec<String>, count: &mut usize) {
+        match &node.kind {
             NodeKind::Num(val) => {
                 asm.push(format!("  push {}", val));
                 return;
             }
             NodeKind::Var { .. } => {
-                self.gen_lval(asm, count);
+                self.gen_lval(&node, asm, count);
                 asm.push(String::from("  pop rax"));
-                self.load(asm);
+                self.load(&node, asm);
                 asm.push(String::from("  push rax"));
                 return;
             }
             NodeKind::Assign => {
-                if let Some(node) = self.lhs.as_ref() {
-                    node.gen_lval(asm, count);
+                if let Some(node) = node.lhs.as_ref() {
+                    self.gen_lval(&node, asm, count);
                 }
-                if let Some(node) = self.rhs.as_ref() {
-                    node.gen_expr(asm, count);
+                if let Some(node) = node.rhs.as_ref() {
+                    self.gen_expr(&node, asm, count);
                 }
 
                 asm.push(String::from("  pop rdi"));
                 asm.push(String::from("  pop rax"));
-                self.store(asm);
+                self.store(&node, asm);
                 asm.push(String::from("  push rdi"));
                 return;
             }
             NodeKind::Addr => {
-                if let Some(node) = self.lhs.as_ref() {
-                    node.gen_lval(asm, count);
+                if let Some(node) = node.lhs.as_ref() {
+                    self.gen_lval(&node, asm, count);
                 }
                 return;
             }
             NodeKind::Deref => {
-                if let Some(node) = self.lhs.as_ref() {
-                    node.gen_expr(asm, count);
+                if let Some(node) = node.lhs.as_ref() {
+                    self.gen_expr(&node, asm, count);
                 }
                 asm.push(String::from("  pop rax"));
-                self.load(asm);
+                self.load(&node, asm);
                 asm.push(String::from("  push rax"));
                 return;
             }
             NodeKind::StmtExpr { body } => {
                 for node in body.iter() {
-                    node.gen_stmt(asm, count);
+                    self.gen_stmt(&node, asm, count);
                 }
                 return;
             }
             NodeKind::FuncCall { name, args } => {
                 let mut nargs = 0;
                 for arg in args {
-                    arg.gen_expr(asm, count);
+                    self.gen_expr(&arg, asm, count);
                     nargs += 1;
                 }
 
@@ -258,16 +278,16 @@ impl Node {
             _ => (),
         }
 
-        if let Some(node) = self.lhs.as_ref() {
-            node.gen_expr(asm, count);
+        if let Some(node) = node.lhs.as_ref() {
+            self.gen_expr(&node, asm, count);
         }
-        if let Some(node) = self.rhs.as_ref() {
-            node.gen_expr(asm, count);
+        if let Some(node) = node.rhs.as_ref() {
+            self.gen_expr(&node, asm, count);
         }
         asm.push(String::from("  pop rdi"));
         asm.push(String::from("  pop rax"));
 
-        match self.kind {
+        match node.kind {
             NodeKind::Add => {
                 asm.push(String::from("  add rax, rdi"));
             }

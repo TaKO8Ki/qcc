@@ -222,4 +222,22 @@ assert 2 'int main() { int x=2; { int x=3; } return x; }'
 assert 2 'int main() { int x=2; { int x=3; } { int y=4; return x; }}'
 assert 3 'int main() { int x=2; { x=3; } return x; }'
 
+'int main() { ({ int a; int z; a=3; z=5; a+z; }); }'
+
+'int main() { assert(2, 1); }
+int assert(int expected, int actual)
+{
+    printf("%s => %d\n", "aaa", actual);
+}'
+
+'
+int assert(int expected, int actual, char *code)
+{
+    printf("%s => %d\n", expected, actual);
+}
+int main() { 
+  assert(1, 1, "1");
+}
+'
+
 echo OK

@@ -163,6 +163,7 @@ impl Tokens {
             tokens,
             index: 0,
             functions: LinkedList::new(),
+            string_literal_id: 0
         }
     }
 
@@ -241,6 +242,7 @@ impl Tokens {
             scope: LinkedList::new(),
             index: self.index,
             functions: LinkedList::new(),
+            string_literal_id: 0,
         };
         let ty = tokens.declspec();
         let ty = tokens.declarator(ty);
@@ -280,7 +282,7 @@ impl Tokens {
     fn add_lvar(&mut self, name: String, ty: Type) -> Var {
         let lvar = Var {
             name: name.clone(),
-            offset: self.locals.front().map_or(0, |lvar| lvar.offset) + ty.size().unwrap() as usize,
+            offset: 0,
             ty,
             is_local: true,
             init_data: None,
@@ -293,8 +295,7 @@ impl Tokens {
     fn add_gvar(&mut self, name: String, ty: Type, init_data: Option<String>) -> Var {
         let gvar = Var {
             name: name.clone(),
-            offset: self.globals.front().map_or(0, |gvar| gvar.offset)
-                + ty.size().unwrap() as usize,
+            offset: 0,
             ty,
             is_local: false,
             init_data,
@@ -304,7 +305,9 @@ impl Tokens {
         gvar
     }
 
-    fn new_string_literal(&mut self, name: String, ty: Type, init_data: String) -> Var {
+    fn new_string_literal(&mut self, ty: Type, init_data: String) -> Var {
+        let name = format!(".L..{}", self.string_literal_id);
+        self.string_literal_id += 1;
         self.add_gvar(name, ty, Some(init_data))
     }
 
@@ -510,9 +513,9 @@ impl Tokens {
         let mut node = self.mul();
 
         loop {
-            if self.consume("+") {
+            if self.consume('+') {
                 node = Node::new_add(node, self.mul());
-            } else if self.consume("-") {
+            } else if self.consume('-') {
                 node = Node::new_sub(node, self.mul())
             } else {
                 return node;
@@ -537,13 +540,13 @@ impl Tokens {
     /// unary = ("+" | "-" | "*" | "&") unary
     ///       | postfix
     fn unary(&mut self) -> Node {
-        if self.consume("+") {
-            return self.primary();
-        } else if self.consume("-") {
-            return Node::new_binary(NodeKind::Sub, Node::new_node_num(0), self.primary());
-        } else if self.consume("&") {
+        if self.consume('+') {
+            return self.unary();
+        } else if self.consume('-') {
+            return Node::new_binary(NodeKind::Sub, Node::new_node_num(0), self.unary());
+        } else if self.consume('&') {
             return Node::new_unary(NodeKind::Addr, self.unary());
-        } else if self.consume("*") {
+        } else if self.consume('*') {
             return Node::new_unary(NodeKind::Deref, self.unary());
         }
         self.postfix()
@@ -601,7 +604,7 @@ impl Tokens {
         }
 
         if let TokenKind::Str { ty, str } = self.token().clone().kind {
-            let var = self.new_string_literal(".L..a".to_string(), *ty, str);
+            let var = self.new_string_literal(*ty, str);
             log::debug!("string literal: {:?}", var);
             self.next();
             return Node::new_node_var(var.clone(), var.ty);

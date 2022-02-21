@@ -117,6 +117,7 @@ struct Tokens {
     scope: LinkedList<Scope>,
     index: usize,
     functions: LinkedList<Function>,
+    string_literal_id: usize,
 }
 
 #[derive(Debug)]
