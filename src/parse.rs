@@ -280,6 +280,7 @@ impl Tokens {
 
     fn add_lvar(&mut self, name: String, ty: Type) -> Var {
         let lvar = Var {
+            id: self.locals.front().map_or(0, |lvar| lvar.id + 1),
             name: name.clone(),
             offset: 0,
             ty,
@@ -293,6 +294,7 @@ impl Tokens {
 
     fn add_gvar(&mut self, name: String, ty: Type, init_data: Option<String>) -> Var {
         let gvar = Var {
+            id: 0,
             name: name.clone(),
             offset: 0,
             ty,
@@ -652,6 +654,7 @@ impl Tokens {
                 body: self.compound_stmt(),
                 params: func_params,
                 locals: self.locals.clone(),
+                stack_size: None,
             };
             self.leave_scope();
             return function;

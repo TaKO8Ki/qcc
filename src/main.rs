@@ -126,10 +126,12 @@ struct Function {
     body: Node,
     params: LinkedList<Var>,
     locals: LinkedList<Var>,
+    stack_size: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
 struct Var {
+    id: usize,
     name: String,
     offset: usize,
     ty: Type,

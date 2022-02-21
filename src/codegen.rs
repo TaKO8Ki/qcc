@@ -6,7 +6,7 @@ const ARG_REG64: &[&str] = &["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 impl Tokens {
     pub(crate) fn codegen(&mut self, asm: &mut Vec<String>) {
         for func in &mut self.functions {
-            func.assign_lvar_offset();
+            func.stack_size = Some(func.assign_lvar_offset());
         }
         self.emit_data(asm);
         let mut count = 0;
@@ -18,7 +18,8 @@ impl Tokens {
 
             asm.push(String::from("  push rbp"));
             asm.push(String::from("  mov rbp, rsp"));
-            asm.push(String::from("  sub rsp, 208"));
+            log::debug!("stack size={:?}", func.stack_size);
+            asm.push(format!("  sub rsp, {}", func.stack_size.unwrap()));
 
             func.gen_param(asm);
 
@@ -52,7 +53,7 @@ impl Tokens {
 impl Function {
     fn gen_param(&self, asm: &mut Vec<String>) {
         for (i, var) in self.params.iter().enumerate() {
-            let var = self.find_lvar(&var.name).unwrap();
+            let var = self.find_lvar(&var).unwrap();
             asm.push(String::from("  mov rax, rbp"));
             asm.push(format!("  sub rax, {}", var.offset));
             asm.push(String::from("  push rax"));
@@ -68,17 +69,20 @@ impl Function {
         }
     }
 
-    fn assign_lvar_offset(&mut self) {
+    fn assign_lvar_offset(&mut self) -> usize {
         let mut offset = 0;
         log::debug!("locals={:?}", self.locals);
         for lvar in &mut self.locals.iter_mut() {
             offset += lvar.ty.size().unwrap() as usize;
             lvar.offset = offset;
         }
+        (offset + 16 - 1) / 16 * 16
     }
 
-    fn find_lvar(&self, name: &str) -> Option<&Var> {
-        self.locals.iter().find(|lvar| lvar.name == name)
+    fn find_lvar(&self, var: &Var) -> Option<&Var> {
+        self.locals
+            .iter()
+            .find(|lvar| lvar.name == var.name && lvar.id == var.id)
     }
 
     fn load(&self, node: &Node, asm: &mut Vec<String>) {
@@ -113,7 +117,7 @@ impl Function {
                     asm.push(String::from("  mov rax, rbp"));
                     asm.push(format!(
                         "  sub rax, {}",
-                        self.find_lvar(&var.name).unwrap().offset
+                        self.find_lvar(&var).unwrap().offset
                     ));
                 } else {
                     asm.push(format!("  lea rax, {}[rip]", var.name));

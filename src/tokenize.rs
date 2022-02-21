@@ -226,7 +226,11 @@ fn read_string_literal(chars: &mut impl Iterator<Item = (usize, char)>) -> Resul
         if c == '"' {
             break;
         }
+
         str.push(c);
+        if c == '\\' {
+            str.push(chars.next().unwrap().1);
+        }
     }
 
     let mut buf = String::new();
