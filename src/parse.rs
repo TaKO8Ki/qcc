@@ -765,13 +765,15 @@ impl Tokens {
 
     fn error_token(&self, msg: String) {
         panic!(
-            "{}\n{}^ {}",
+            "{}\n{}^ {} {}:{}",
             self.tokens
                 .iter()
                 .map(|token| token.str.clone())
                 .collect::<String>(),
             (1..self.index).map(|_| " ").collect::<String>(),
-            msg
+            msg,
+            self.token().line_number,
+            self.token().loc,
         )
     }
 }

@@ -1,7 +1,7 @@
 use crate::{Token, TokenKind, Type};
 use std::str::Chars;
 
-fn error_at(input: Chars, index: usize, error: String) -> String {
+fn error_at(c: char, input: Chars, index: usize, error: String) -> String {
     let loc: Vec<char> = input
         .clone()
         .enumerate()
@@ -21,22 +21,30 @@ fn error_at(input: Chars, index: usize, error: String) -> String {
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, str: impl Into<String>) -> Self {
+    pub fn new(kind: TokenKind, str: impl Into<String>, loc: usize, line_number: usize) -> Self {
         let tok = Self {
             kind,
             str: str.into(),
+            loc,
+            line_number,
         };
         tok
     }
 
     pub fn tokenize(p: String) -> Result<Vec<Token>, String> {
         let mut tokens = vec![];
+
+        let mut line_number = 1;
         let chars = p.chars();
         let chars_vec = p.chars().collect::<Vec<char>>();
         let mut chars_iter = chars.clone().enumerate();
 
         while let Some((i, p)) = chars_iter.next() {
             log::debug!("tokens={:?}", tokens);
+
+            if p == '\n' {
+                line_number += 1;
+            }
 
             if is_line_comments(chars_vec.clone(), p, i) {
                 chars_iter.next();
@@ -57,7 +65,12 @@ impl Token {
                         }
                     }
                     None => {
-                        return Err(error_at(chars, i, "unterminated block comment".to_string()));
+                        return Err(error_at(
+                            p,
+                            chars,
+                            i,
+                            "unterminated block comment".to_string(),
+                        ));
                     }
                 }
                 chars_iter.next();
@@ -70,7 +83,7 @@ impl Token {
             }
 
             if p == '"' {
-                let token = read_string_literal(&mut chars_iter);
+                let token = read_string_literal(&mut chars_iter, i, line_number);
                 tokens.push(token?);
                 continue;
             }
@@ -79,7 +92,7 @@ impl Token {
                 let mut ident = p.to_string();
                 if let Some(next_c) = chars_vec.get(i + 1) {
                     if !(is_ident(*next_c) || is_number(*next_c)) {
-                        tokens.push(Self::new(TokenKind::Ident, ident));
+                        tokens.push(Self::new(TokenKind::Ident, ident, i, line_number));
                         continue;
                     }
                 }
@@ -92,7 +105,7 @@ impl Token {
                         }
                     }
                 }
-                tokens.push(Self::new(TokenKind::Ident, ident));
+                tokens.push(Self::new(TokenKind::Ident, ident, i, line_number));
                 continue;
             }
 
@@ -104,7 +117,7 @@ impl Token {
                         op.push(*next_c)
                     };
                 }
-                tokens.push(Self::new(TokenKind::Punct, op));
+                tokens.push(Self::new(TokenKind::Punct, op, i, line_number));
                 continue;
             }
 
@@ -123,12 +136,16 @@ impl Token {
                                     })?,
                             ),
                             p,
+                            i,
+                            line_number,
                         ));
                         continue;
                     }
                 }
+                let mut idx = i;
                 while let Some((i, c)) = chars_iter.next() {
                     number.push(c);
+                    idx = 1;
                     if let Some(next_c) = chars_vec.get(i + 1) {
                         if !next_c.is_digit(10) {
                             break;
@@ -140,13 +157,15 @@ impl Token {
                         |_| Err(format!("cannot convert char to integer: {:?}", number)),
                     )?),
                     p,
+                    idx,
+                    line_number,
                 ));
                 continue;
             };
-            return Err(error_at(chars, i, "invalid token".to_string()));
+            return Err(error_at(p, chars, i, "invalid token".to_string()));
         }
 
-        tokens.push(Self::new(TokenKind::Eof, ""));
+        tokens.push(Self::new(TokenKind::Eof, "", 0, 0));
         convert_keywords(&mut tokens);
         Ok(tokens)
     }
@@ -215,7 +234,11 @@ fn convert_keywords(tokens: &mut Vec<Token>) {
     }
 }
 
-fn read_string_literal(chars: &mut impl Iterator<Item = (usize, char)>) -> Result<Token, String> {
+fn read_string_literal(
+    chars: &mut impl Iterator<Item = (usize, char)>,
+    column_number: usize,
+    line_number: usize,
+) -> Result<Token, String> {
     let mut str = String::new();
     while let Some((_, c)) = chars.next() {
         log::debug!("string literal={}", c);
@@ -249,6 +272,8 @@ fn read_string_literal(chars: &mut impl Iterator<Item = (usize, char)>) -> Resul
             ty: Box::new(Type::type_char().array_of(buf.len() as u16 + 1)),
         },
         str,
+        column_number,
+        line_number,
     ))
 }
 

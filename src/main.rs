@@ -143,6 +143,8 @@ struct Var {
 struct Token {
     kind: TokenKind,
     str: String,
+    loc: usize,
+    line_number: usize,
 }
 
 #[derive(Debug, Clone)]
