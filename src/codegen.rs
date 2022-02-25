@@ -216,6 +216,7 @@ impl Function {
     }
 
     pub fn gen_expr(&self, node: &Node, asm: &mut Vec<String>, count: &mut usize) {
+        asm.push(format!("  .loc 1 {}", node.token.line_number));
         match &node.kind {
             NodeKind::Num(val) => {
                 asm.push(format!("  push {}", val));

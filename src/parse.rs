@@ -13,52 +13,57 @@ impl Token {
 }
 
 impl Node {
-    fn new(kind: NodeKind) -> Self {
+    fn new(kind: NodeKind, token: &Token) -> Self {
         Node {
             kind,
             lhs: None,
             rhs: None,
             ty: None,
+            token: token.clone(),
         }
     }
 
-    fn new_binary(kind: NodeKind, lhs: Node, rhs: Node) -> Self {
+    fn new_binary(kind: NodeKind, lhs: Node, rhs: Node, token: &Token) -> Self {
         Node {
             kind,
             lhs: Some(Box::new(lhs)),
             rhs: Some(Box::new(rhs)),
             ty: None,
+            token: token.clone(),
         }
     }
 
-    fn new_unary(kind: NodeKind, lhs: Node) -> Self {
+    fn new_unary(kind: NodeKind, lhs: Node, token: &Token) -> Self {
         Node {
             kind,
             lhs: Some(Box::new(lhs)),
             rhs: None,
             ty: None,
+            token: token.clone(),
         }
     }
 
-    fn new_node_num(val: u16) -> Self {
+    fn new_node_num(val: u16, token: &Token) -> Self {
         Node {
             kind: NodeKind::Num(val),
             lhs: None,
             rhs: None,
             ty: None,
+            token: token.clone(),
         }
     }
 
-    fn new_node_var(var: Var, ty: Type) -> Self {
+    fn new_node_var(var: Var, ty: Type, token: &Token) -> Self {
         Node {
             kind: NodeKind::Var(var),
             lhs: None,
             rhs: None,
             ty: Some(ty),
+            token: token.clone(),
         }
     }
 
-    fn new_block(body: Vec<Node>) -> Self {
+    fn new_block(body: Vec<Node>, token: &Token) -> Self {
         Node {
             kind: NodeKind::Block {
                 body: Box::new(body),
@@ -66,10 +71,11 @@ impl Node {
             lhs: None,
             rhs: None,
             ty: None,
+            token: token.clone(),
         }
     }
 
-    fn new_add(lhs: Node, rhs: Node) -> Self {
+    fn new_add(lhs: Node, rhs: Node, token: &Token) -> Self {
         let mut lhs = lhs;
         let mut rhs = rhs;
 
@@ -80,7 +86,7 @@ impl Node {
             let lhs_ty = lhs_ty.clone();
             if let Some(rhs_ty) = &rhs.ty {
                 if lhs_ty.is_integer() && rhs_ty.is_integer() {
-                    return Node::new_binary(NodeKind::Add, lhs, rhs);
+                    return Node::new_binary(NodeKind::Add, lhs, rhs, token);
                 }
 
                 if lhs_ty.is_pointer() && rhs_ty.is_pointer() {
@@ -99,8 +105,10 @@ impl Node {
                     Node::new_binary(
                         NodeKind::Mul,
                         rhs,
-                        Self::new_node_num(lhs_ty.base().unwrap().size().unwrap()),
+                        Self::new_node_num(lhs_ty.base().unwrap().size().unwrap(), token),
+                        token,
                     ),
+                    token,
                 );
             }
         }
@@ -108,7 +116,7 @@ impl Node {
         unreachable!("invalid operands")
     }
 
-    fn new_sub(lhs: Node, rhs: Node) -> Self {
+    fn new_sub(lhs: Node, rhs: Node, token: &Token) -> Self {
         let mut lhs = lhs;
         let mut rhs = rhs;
 
@@ -118,7 +126,7 @@ impl Node {
         if let Some(lhs_ty) = &lhs.ty {
             if let Some(rhs_ty) = &rhs.ty {
                 if lhs_ty.is_integer() && rhs_ty.is_integer() {
-                    return Node::new_binary(NodeKind::Sub, lhs, rhs);
+                    return Node::new_binary(NodeKind::Sub, lhs, rhs, token);
                 }
 
                 if rhs_ty.is_integer() {
@@ -126,11 +134,12 @@ impl Node {
                         let mut rhs = Node::new_binary(
                             NodeKind::Mul,
                             rhs,
-                            Self::new_node_num(base.size().unwrap()),
+                            Self::new_node_num(base.size().unwrap(), token),
+                            token,
                         );
                         rhs.add_type();
                         let ty = lhs.ty.clone();
-                        let mut node = Node::new_binary(NodeKind::Sub, lhs, rhs);
+                        let mut node = Node::new_binary(NodeKind::Sub, lhs, rhs, token);
                         node.ty = ty;
                         return node;
                     }
@@ -138,12 +147,13 @@ impl Node {
 
                 if rhs_ty.is_pointer() {
                     if let TypeKind::Ptr { base, .. } = &lhs_ty.clone().kind {
-                        let mut node = Node::new_binary(NodeKind::Sub, lhs, rhs);
+                        let mut node = Node::new_binary(NodeKind::Sub, lhs, rhs, token);
                         node.ty = Some(Type::type_int());
                         return Node::new_binary(
                             NodeKind::Div,
                             node,
-                            Self::new_node_num(base.size().unwrap()),
+                            Self::new_node_num(base.size().unwrap(), token),
+                            token,
                         );
                     }
                 }
@@ -208,7 +218,7 @@ impl Tokens {
     fn assign(&mut self) -> Node {
         let mut node = self.equality();
         if self.consume("=") {
-            node = Node::new_binary(NodeKind::Assign, node, self.assign());
+            node = Node::new_binary(NodeKind::Assign, node, self.assign(), self.token());
         }
         node
     }
@@ -229,7 +239,7 @@ impl Tokens {
                 ty.clone(),
                 None,
             );
-            Node::new_node_var(gvar, ty);
+            Node::new_node_var(gvar, ty, self.token());
         }
     }
 
@@ -389,19 +399,19 @@ impl Tokens {
 
             let ty = self.declarator(basety.clone());
             let lvar = self.add_lvar(ty.clone().name.unwrap().get_ident().unwrap(), ty.clone());
-            let lhs = Node::new_node_var(lvar, ty);
+            let lhs = Node::new_node_var(lvar, ty, self.token());
 
             if !self.consume('=') {
                 continue;
             }
 
             let rhs = self.assign();
-            let node = Node::new_binary(NodeKind::Assign, lhs, rhs);
-            body.push(Node::new_unary(NodeKind::ExprStmt, node));
+            let node = Node::new_binary(NodeKind::Assign, lhs, rhs, self.token());
+            body.push(Node::new_unary(NodeKind::ExprStmt, node, self.token()));
         }
 
         log::debug!("body={:?}", body);
-        let node = Node::new_block(body);
+        let node = Node::new_block(body, self.token());
         log::debug!("declaration last token={:?}", self.token());
         node
     }
@@ -412,11 +422,14 @@ impl Tokens {
             let cond = self.expr();
             self.expect(')');
             let then = self.stmt();
-            let mut node = Node::new(NodeKind::If {
-                cond: Box::new(cond),
-                then: Box::new(then),
-                els: None,
-            });
+            let mut node = Node::new(
+                NodeKind::If {
+                    cond: Box::new(cond),
+                    then: Box::new(then),
+                    els: None,
+                },
+                self.token(),
+            );
             if self.consume("else") {
                 let els = self.stmt();
                 if let NodeKind::If { cond, then, .. } = node.kind {
@@ -435,10 +448,13 @@ impl Tokens {
             let cond = self.expr();
             self.expect(')');
             let then = self.stmt();
-            return Node::new(NodeKind::While {
-                cond: Box::new(cond),
-                then: Box::new(then),
-            });
+            return Node::new(
+                NodeKind::While {
+                    cond: Box::new(cond),
+                    then: Box::new(then),
+                },
+                self.token(),
+            );
         };
 
         if self.consume("for") {
@@ -459,16 +475,19 @@ impl Tokens {
             }
 
             let then = self.stmt();
-            return Node::new(NodeKind::For {
-                init: Box::new(init),
-                cond: cond.map(|c| Box::new(c)),
-                inc: inc.map(|i| Box::new(i)),
-                then: Box::new(then),
-            });
+            return Node::new(
+                NodeKind::For {
+                    init: Box::new(init),
+                    cond: cond.map(|c| Box::new(c)),
+                    inc: inc.map(|i| Box::new(i)),
+                    then: Box::new(then),
+                },
+                self.token(),
+            );
         };
 
         if self.consume("return") {
-            let node = Node::new_unary(NodeKind::Return, self.expr());
+            let node = Node::new_unary(NodeKind::Return, self.expr(), self.token());
             self.expect(';');
             return node;
         };
@@ -500,15 +519,15 @@ impl Tokens {
             body.push(node);
         }
         self.leave_scope();
-        Node::new_block(body)
+        Node::new_block(body, self.token())
     }
 
     fn expr_stmt(&mut self) -> Node {
         if self.consume(';') {
-            return Node::new_block(Vec::new());
+            return Node::new_block(Vec::new(), self.token());
         }
 
-        let node = Node::new_unary(NodeKind::ExprStmt, self.expr());
+        let node = Node::new_unary(NodeKind::ExprStmt, self.expr(), self.token());
         node
     }
 
@@ -517,9 +536,9 @@ impl Tokens {
 
         loop {
             if self.consume('+') {
-                node = Node::new_add(node, self.mul());
+                node = Node::new_add(node, self.mul(), self.token());
             } else if self.consume('-') {
-                node = Node::new_sub(node, self.mul())
+                node = Node::new_sub(node, self.mul(), self.token())
             } else {
                 return node;
             }
@@ -531,9 +550,9 @@ impl Tokens {
 
         loop {
             if self.consume("*") {
-                node = Node::new_binary(NodeKind::Mul, node, self.unary());
+                node = Node::new_binary(NodeKind::Mul, node, self.unary(), self.token());
             } else if self.consume("/") {
-                node = Node::new_binary(NodeKind::Div, node, self.unary());
+                node = Node::new_binary(NodeKind::Div, node, self.unary(), self.token());
             } else {
                 return node;
             }
@@ -546,11 +565,16 @@ impl Tokens {
         if self.consume('+') {
             return self.unary();
         } else if self.consume('-') {
-            return Node::new_binary(NodeKind::Sub, Node::new_node_num(0), self.unary());
+            return Node::new_binary(
+                NodeKind::Sub,
+                Node::new_node_num(0, self.token()),
+                self.unary(),
+                self.token(),
+            );
         } else if self.consume('&') {
-            return Node::new_unary(NodeKind::Addr, self.unary());
+            return Node::new_unary(NodeKind::Addr, self.unary(), self.token());
         } else if self.consume('*') {
-            return Node::new_unary(NodeKind::Deref, self.unary());
+            return Node::new_unary(NodeKind::Deref, self.unary(), self.token());
         }
         self.postfix()
     }
@@ -560,7 +584,11 @@ impl Tokens {
         while self.consume('[') {
             let idx = self.expr();
             self.expect(']');
-            node = Node::new_unary(NodeKind::Deref, Node::new_add(node, idx))
+            node = Node::new_unary(
+                NodeKind::Deref,
+                Node::new_add(node, idx, self.token()),
+                self.token(),
+            )
         }
         node
     }
@@ -572,9 +600,12 @@ impl Tokens {
                 if let Some(last_node) = body.pop() {
                     body.push(*last_node.lhs.unwrap());
                 }
-                let node = Node::new(NodeKind::StmtExpr {
-                    body: Box::new(body),
-                });
+                let node = Node::new(
+                    NodeKind::StmtExpr {
+                        body: Box::new(body),
+                    },
+                    self.token(),
+                );
                 self.expect(')');
                 return node;
             }
@@ -586,7 +617,7 @@ impl Tokens {
         if self.consume("sizeof") {
             let mut node = self.unary();
             node.add_type();
-            return Node::new_node_num(node.ty.unwrap().size().unwrap());
+            return Node::new_node_num(node.ty.unwrap().size().unwrap(), self.token());
         }
 
         if let TokenKind::Ident = self.token().kind {
@@ -596,7 +627,7 @@ impl Tokens {
 
             let var = self.find_var();
             let node = match var {
-                Some(var) => Node::new_node_var(var.clone(), var.ty.clone()),
+                Some(var) => Node::new_node_var(var.clone(), var.ty.clone(), self.token()),
                 None => panic!(
                     "undefined variable: {:?}, locals={:?}, global={:?}, scope={:?}",
                     self.token(),
@@ -614,11 +645,11 @@ impl Tokens {
             let var = self.new_string_literal(*ty, str);
             log::debug!("string literal: {:?}", var);
             self.next();
-            return Node::new_node_var(var.clone(), var.ty);
+            return Node::new_node_var(var.clone(), var.ty, self.token());
         }
 
         if let TokenKind::Num(val) = self.token().kind {
-            let node = Node::new_node_num(val);
+            let node = Node::new_node_num(val, self.token());
             self.next();
             return node;
         }
@@ -675,10 +706,13 @@ impl Tokens {
             args.push(self.assign());
         }
         log::debug!("tokentokentoken={:?}", self.token());
-        Node::new(NodeKind::FuncCall {
-            name: start.str,
-            args,
-        })
+        Node::new(
+            NodeKind::FuncCall {
+                name: start.str,
+                args,
+            },
+            self.token(),
+        )
     }
 
     fn equality(&mut self) -> Node {
@@ -686,9 +720,9 @@ impl Tokens {
 
         loop {
             if self.consume("==") {
-                node = Node::new_binary(NodeKind::Eq, node, self.relational());
+                node = Node::new_binary(NodeKind::Eq, node, self.relational(), self.token());
             } else if self.consume("!=") {
-                node = Node::new_binary(NodeKind::Ne, node, self.relational());
+                node = Node::new_binary(NodeKind::Ne, node, self.relational(), self.token());
             } else {
                 return node;
             }
@@ -700,13 +734,13 @@ impl Tokens {
 
         loop {
             if self.consume("<") {
-                node = Node::new_binary(NodeKind::Lt, node, self.add());
+                node = Node::new_binary(NodeKind::Lt, node, self.add(), self.token());
             } else if self.consume("<=") {
-                node = Node::new_binary(NodeKind::Le, node, self.add());
+                node = Node::new_binary(NodeKind::Le, node, self.add(), self.token());
             } else if self.consume(">") {
-                node = Node::new_binary(NodeKind::Lt, self.add(), node);
+                node = Node::new_binary(NodeKind::Lt, self.add(), node, self.token());
             } else if self.consume(">=") {
-                node = Node::new_binary(NodeKind::Le, self.add(), node);
+                node = Node::new_binary(NodeKind::Le, self.add(), node, self.token());
             } else {
                 return node;
             }

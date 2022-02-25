@@ -153,6 +153,7 @@ struct Node {
     lhs: Option<Box<Node>>,
     rhs: Option<Box<Node>>,
     ty: Option<Type>,
+    token: Token,
 }
 
 #[derive(Debug)]
@@ -199,6 +200,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokens.program();
 
     log::debug!("parsed tokens: {:#?}", tokens);
+    asm.push(format!(".file 1 \"{}\"", args.input.unwrap()));
     tokens.codegen(&mut asm);
 
     let mut file = File::create(args.output)?;
