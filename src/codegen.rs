@@ -129,6 +129,14 @@ impl Function {
                     self.gen_expr(&node, asm, count);
                 }
             }
+            NodeKind::Comma => {
+                if let Some(node) = node.lhs.as_ref() {
+                    self.gen_expr(&node, asm, count);
+                }
+                if let Some(node) = node.rhs.as_ref() {
+                    self.gen_lval(&node, asm, count);
+                }
+            }
             _ => unreachable!("not lval"),
         }
     }
@@ -281,6 +289,15 @@ impl Function {
                 asm.push(String::from("  mov rax, 0"));
                 asm.push(format!("  call {}", name));
                 asm.push(String::from("  push rax"));
+                return;
+            }
+            NodeKind::Comma => {
+                if let Some(node) = node.lhs.as_ref() {
+                    self.gen_expr(&node, asm, count);
+                }
+                if let Some(node) = node.rhs.as_ref() {
+                    self.gen_expr(&node, asm, count);
+                }
                 return;
             }
             _ => (),

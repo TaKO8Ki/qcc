@@ -59,6 +59,7 @@ enum NodeKind {
     },
     Var(Var),
     Num(u16),
+    Comma,
 }
 
 #[derive(Debug, Clone)]

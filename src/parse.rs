@@ -212,7 +212,14 @@ impl Tokens {
     }
 
     pub fn expr(&mut self) -> Node {
-        self.assign()
+        let mut node = self.assign();
+
+        let token = self.token().clone();
+        while self.consume(',') {
+            node = Node::new_unary(NodeKind::ExprStmt, node, &token);
+            node = Node::new_binary(NodeKind::Comma, node, self.assign(), &token);
+        }
+        node
     }
 
     fn assign(&mut self) -> Node {

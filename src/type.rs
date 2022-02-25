@@ -152,9 +152,14 @@ impl Node {
             | NodeKind::Ne
             | NodeKind::Lt
             | NodeKind::Le
-            | NodeKind::Var { .. }
             | NodeKind::Num(_)
             | NodeKind::FuncCall { .. } => self.ty = Some(Type::type_int()),
+            NodeKind::Var(var) => self.ty = Some(var.ty.clone()),
+            NodeKind::Comma => {
+                if let Some(rhs) = &self.rhs {
+                    self.ty = rhs.ty.clone()
+                }
+            }
             NodeKind::Addr => {
                 self.ty = if let Some(TypeKind::Array { base, .. }) = self
                     .lhs
