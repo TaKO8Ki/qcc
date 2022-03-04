@@ -60,6 +60,7 @@ enum NodeKind {
     Var(Var),
     Num(u16),
     Comma,
+    Member(Member),
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +84,17 @@ enum TypeKind {
         len: u16,
         base: Box<Type>,
     },
+    Struct {
+        size: u16,
+        members: Vec<Member>,
+    },
+}
+
+#[derive(Debug, Clone)]
+struct Member {
+    ty: Type,
+    name: Option<Token>,
+    offset: u16,
 }
 
 #[derive(Debug)]
@@ -127,14 +139,14 @@ struct Function {
     body: Node,
     params: LinkedList<Var>,
     locals: LinkedList<Var>,
-    stack_size: Option<usize>,
+    stack_size: Option<u16>,
 }
 
 #[derive(Debug, Clone)]
 struct Var {
     id: usize,
     name: String,
-    offset: usize,
+    offset: u16,
     ty: Type,
     is_local: bool,
     init_data: Option<String>,

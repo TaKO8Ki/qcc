@@ -1,4 +1,6 @@
-use crate::{Node, NodeKind, Type, TypeKind};
+use std::collections::LinkedList;
+
+use crate::{Member, Node, NodeKind, Token, Type, TypeKind};
 
 impl Type {
     pub fn type_int() -> Self {
@@ -15,12 +17,19 @@ impl Type {
         }
     }
 
+    pub fn type_struct(members: Vec<Member>, size: u16, token: Token) -> Self {
+        Self {
+            kind: TypeKind::Struct { members, size },
+            name: Some(token),
+        }
+    }
+
     pub fn is_integer(&self) -> bool {
         matches!(self.kind, TypeKind::Int { .. } | TypeKind::Char { .. })
     }
 
     pub fn is_pointer(&self) -> bool {
-        matches!(self.kind, TypeKind::Ptr { .. })
+        matches!(self.kind, TypeKind::Ptr { .. } | TypeKind::Array { .. })
     }
 
     pub fn base(&self) -> Option<Type> {
@@ -35,7 +44,8 @@ impl Type {
             TypeKind::Int { size }
             | TypeKind::Ptr { size, .. }
             | TypeKind::Array { size, .. }
-            | TypeKind::Char { size, .. } => Some(size.clone()),
+            | TypeKind::Char { size, .. }
+            | TypeKind::Struct { size, .. } => Some(size.clone()),
             _ => None,
         }
     }
@@ -160,6 +170,7 @@ impl Node {
                     self.ty = rhs.ty.clone()
                 }
             }
+            NodeKind::Member(member) => self.ty = Some(member.ty.clone()),
             NodeKind::Addr => {
                 self.ty = if let Some(TypeKind::Array { base, .. }) = self
                     .lhs

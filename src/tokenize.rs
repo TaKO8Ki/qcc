@@ -162,7 +162,7 @@ impl Token {
                 ));
                 continue;
             };
-            return Err(error_at(p, chars, i, "invalid token".to_string()));
+            return Err(error_at(p, chars, i, format!("invalid token: {}", p)));
         }
 
         tokens.push(Self::new(TokenKind::Eof, "", 0, 0));
@@ -173,7 +173,7 @@ impl Token {
 
 fn is_keyword(token: impl Into<String>) -> bool {
     [
-        "return", "if", "else", "while", "for", "int", "char", "sizeof",
+        "return", "if", "else", "while", "for", "int", "char", "sizeof", "struct",
     ]
     .contains(&token.into().as_ref())
 }
@@ -196,6 +196,7 @@ fn is_punctuators(ch: char) -> bool {
         || ch == ','
         || ch == '['
         || ch == ']'
+        || ch == '.'
 }
 
 fn is_cmp_op(op: String) -> bool {

@@ -69,11 +69,11 @@ impl Function {
         }
     }
 
-    fn assign_lvar_offset(&mut self) -> usize {
+    fn assign_lvar_offset(&mut self) -> u16 {
         let mut offset = 0;
         log::debug!("locals={:?}", self.locals);
         for lvar in &mut self.locals.iter_mut() {
-            offset += lvar.ty.size().unwrap() as usize;
+            offset += lvar.ty.size().unwrap();
             lvar.offset = offset;
         }
         (offset + 16 - 1) / 16 * 16
@@ -136,6 +136,14 @@ impl Function {
                 if let Some(node) = node.rhs.as_ref() {
                     self.gen_lval(&node, asm, count);
                 }
+            }
+            NodeKind::Member(member) => {
+                if let Some(node) = node.lhs.as_ref() {
+                    self.gen_lval(&node, asm, count);
+                }
+                asm.push(String::from("  pop rax"));
+                asm.push(format!("  add rax, {}", member.offset));
+                asm.push(String::from("  push rax"));
             }
             _ => unreachable!("not lval"),
         }
@@ -230,7 +238,7 @@ impl Function {
                 asm.push(format!("  push {}", val));
                 return;
             }
-            NodeKind::Var { .. } => {
+            NodeKind::Var { .. } | NodeKind::Member(_) => {
                 self.gen_lval(&node, asm, count);
                 asm.push(String::from("  pop rax"));
                 self.load(&node, asm);

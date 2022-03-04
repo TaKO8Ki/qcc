@@ -1,5 +1,6 @@
 use crate::{
-    Function, Node, NodeKind, Scope, Token, TokenKind, Tokens, Type, TypeKind, Var, VarScope,
+    Function, Member, Node, NodeKind, Scope, Token, TokenKind, Tokens, Type, TypeKind, Var,
+    VarScope,
 };
 use std::collections::LinkedList;
 
@@ -130,31 +131,37 @@ impl Node {
                 }
 
                 if rhs_ty.is_integer() {
-                    if let TypeKind::Ptr { base, .. } = &lhs_ty.kind {
-                        let mut rhs = Node::new_binary(
-                            NodeKind::Mul,
-                            rhs,
-                            Self::new_node_num(base.size().unwrap(), token),
-                            token,
-                        );
-                        rhs.add_type();
-                        let ty = lhs.ty.clone();
-                        let mut node = Node::new_binary(NodeKind::Sub, lhs, rhs, token);
-                        node.ty = ty;
-                        return node;
+                    match &lhs_ty.kind {
+                        TypeKind::Ptr { base, .. } | TypeKind::Array { base, .. } => {
+                            let mut rhs = Node::new_binary(
+                                NodeKind::Mul,
+                                rhs,
+                                Self::new_node_num(base.size().unwrap(), token),
+                                token,
+                            );
+                            rhs.add_type();
+                            let ty = lhs.ty.clone();
+                            let mut node = Node::new_binary(NodeKind::Sub, lhs, rhs, token);
+                            node.ty = ty;
+                            return node;
+                        }
+                        _ => (),
                     }
                 }
 
                 if rhs_ty.is_pointer() {
-                    if let TypeKind::Ptr { base, .. } = &lhs_ty.clone().kind {
-                        let mut node = Node::new_binary(NodeKind::Sub, lhs, rhs, token);
-                        node.ty = Some(Type::type_int());
-                        return Node::new_binary(
-                            NodeKind::Div,
-                            node,
-                            Self::new_node_num(base.size().unwrap(), token),
-                            token,
-                        );
+                    match &lhs_ty.clone().kind {
+                        TypeKind::Ptr { base, .. } | TypeKind::Array { base, .. } => {
+                            let mut node = Node::new_binary(NodeKind::Sub, lhs, rhs, token);
+                            node.ty = Some(Type::type_int());
+                            return Node::new_binary(
+                                NodeKind::Div,
+                                node,
+                                Self::new_node_num(base.size().unwrap(), token),
+                                token,
+                            );
+                        }
+                        _ => (),
                     }
                 }
             }
@@ -341,8 +348,88 @@ impl Tokens {
             return Type::type_char();
         }
 
-        self.expect("int");
-        Type::type_int()
+        if self.consume("int") {
+            return Type::type_int();
+        }
+
+        if self.consume("struct") {
+            return self.struct_decl();
+        }
+
+        self.error_token("typename expected");
+        unreachable!()
+    }
+
+    fn struct_members(&mut self) -> Type {
+        let mut members = Vec::new();
+        let token = self.token().clone();
+
+        let mut offset = 0;
+        while !self.consume('}') {
+            let basety = self.declspec();
+
+            let mut i = 0;
+            log::debug!("struct members={:?} i={}", basety, i);
+            while !self.consume(';') {
+                log::debug!("i={}", i);
+                if i != 0 {
+                    self.expect(',');
+                }
+                i += 1;
+
+                let ty = self.declarator(basety.clone());
+                members.push(Member {
+                    ty: ty.clone(),
+                    name: ty.name.clone(),
+                    offset,
+                });
+                offset += ty.size().unwrap();
+            }
+        }
+
+        Type::type_struct(members, offset, token)
+    }
+
+    fn struct_decl(&mut self) -> Type {
+        self.expect('{');
+        self.struct_members()
+    }
+
+    fn struct_ref(&self, lhs: &mut Node) -> Node {
+        lhs.add_type();
+        match &lhs.ty {
+            Some(ty) if matches!(ty.kind, TypeKind::Struct { .. }) => (),
+            _ => self.error_token("not a struct`"),
+        }
+
+        Node::new_unary(
+            NodeKind::Member(self.get_struct_member(lhs.ty.clone().unwrap())),
+            lhs.clone(),
+            self.token(),
+        )
+    }
+
+    fn get_struct_member(&self, ty: Type) -> Member {
+        if let TypeKind::Struct { members, .. } = ty.kind {
+            log::debug!(
+                "struct members={:?} token name={} token loc={}",
+                members,
+                self.token().str,
+                self.token().loc
+            );
+            let name = self.token().clone();
+            let member = members
+                .iter()
+                .find(|member| {
+                    member.name.as_ref().map_or(false, |member_name| {
+                        member_name.str == name.str && member_name.loc != name.loc
+                    })
+                })
+                .unwrap();
+            return member.clone();
+        }
+        self.error_token("no such member");
+        unreachable!()
     }
 
     fn func_params(&mut self, ty: Type) -> Type {
@@ -588,16 +675,27 @@ impl Tokens {
 
     fn postfix(&mut self) -> Node {
         let mut node = self.primary();
-        while self.consume('[') {
-            let idx = self.expr();
-            self.expect(']');
-            node = Node::new_unary(
-                NodeKind::Deref,
-                Node::new_add(node, idx, self.token()),
-                self.token(),
-            )
+
+        loop {
+            if self.consume('[') {
+                let idx = self.expr();
+                self.expect(']');
+                node = Node::new_unary(
+                    NodeKind::Deref,
+                    Node::new_add(node, idx, self.token()),
+                    self.token(),
+                );
+                continue;
+            }
+
+            if self.consume('.') {
+                node = self.struct_ref(&mut node);
+                self.next();
+                continue;
+            }
+
+            return node;
         }
-        node
     }
 
     fn primary(&mut self) -> Node {
@@ -801,10 +899,10 @@ impl Tokens {
     }
 
     fn is_type_name(&self) -> bool {
-        self.equal("int") || self.equal("char")
+        self.equal("int") || self.equal("char") || self.equal("struct")
     }
 
-    fn error_token(&self, msg: String) {
+    fn error_token(&self, msg: impl Into<String>) {
         panic!(
             "{}\n{}^ {} {}:{}",
             self.tokens
@@ -812,7 +910,7 @@ impl Tokens {
                 .map(|token| token.str.clone())
                 .collect::<String>(),
             (1..self.index).map(|_| " ").collect::<String>(),
-            msg,
+            msg.into(),
             self.token().line_number,
             self.token().loc,
         )
